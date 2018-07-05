@@ -24,6 +24,7 @@ const uuid = require( './UuidPrefix' )( 'msg' );
 const Emitter = require( './Events' ).Emitter;
 const tinyAvatar = require( './TinyAvatar' );
 const dFace = require( './DFace' );
+
 const util = require( 'util' );
 
 var ns = {};
@@ -33,7 +34,7 @@ ns.IDC = function( dbPool ) {
 	log( 'hi!' );
 	self.IDs = {};
 	self.lastAccess = {};
-	self.timeout = 1000 * 60 * 60 * 36;
+	self.TIMEOUT = 1000 * 60 * 60 * 36;
 	
 	self.init( dbPool );
 }
@@ -73,7 +74,7 @@ ns.IDC.prototype.init = function( dbPool ) {
 	const self = this;
 	self.accDB = new dFace.AccountDB( dbPool );
 	// trim every 24 hours
-	self.trim = setInterval( trims, self.timeout );
+	self.trim = setInterval( trims, self.TIMEOUT );
 	function trims() {
 		self.trimIds();
 	}
@@ -81,7 +82,7 @@ ns.IDC.prototype.init = function( dbPool ) {
 
 ns.IDC.prototype.trimIds = function() {
 	const self = this;
-	let old = Date.now() - self.timeout;
+	let old = Date.now() - self.TIMEOUT;
 	let ids = Object.keys( self.IDs );
 	ids.forEach( id => {
 		let accessTime = self.lastAccess[ id ];
