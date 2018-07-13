@@ -23,21 +23,63 @@ const log = require( './Log' )( 'UserCtrl' );
 
 const ns = {};
 ns.UserCtrl = function() {
-    const self = this;
-    
-    self.init();
+	const self = this;
+	
+	self.accounts = {};
+	self.accIds = [];
+	self.guests = {};
+	self.guestIds = [];
+	
+	self.init();
 }
 
 // Public
 
+ns.UserCtrl.prototype.addAccount = function( account ) {
+	const self = this;
+	log( 'addAccount', account );
+	let aId = account.id;
+	if ( self.accounts[ aId ])
+		return;
+	
+	self.accounts[ aId ] = account;
+	self.accIds.push( aId );
+	self.organizeThings( aId );
+}
+
+ns.UserCtrl.prototype.addGuest = function( guest ) {
+	const self = this;
+	log( 'addGuest', guest );
+}
+
+ns.UserCtrl.prototype.remove = function( accountId ) {
+	const self = this;
+	if ( !self.accounts[ accountId ])
+		return;
+	
+	delete self.accounts[ accountId ];
+	self.accIds = Object.keys( self.accounts );
+}
+
 ns.UserCtrl.prototype.close = function() {
-    const self = this;
+	const self = this;
 }
 
 // Private
 
 ns.UserCtrl.prototype.init = function() {
-    const self = this;
+	const self = this;
+	log( ':3' );
+}
+
+ns.UserCtrl.prototype.organizeThings = function( accId ) {
+	const self = this;
+	const acc = self.accounts[ accId ];
+	if ( !acc )
+		throw new Error( 'UserCtrl.organizeThings - wft no acc' );
+	
+	const worgs = acc.getWorkgroups();
+	log( 'worgs', worgs, 3 );
 }
 
 module.exports = ns.UserCtrl;

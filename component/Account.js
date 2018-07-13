@@ -62,6 +62,12 @@ ns.Account.prototype.close = function() {
 	}
 }
 
+ns.Account.prototype.getWorkgroups = function() {
+	const self = this;
+	//self.log( 'getWorkgroups', self.auth.workgroups, 3 );
+	return self.auth.workgroups;
+}
+
 // Private
 
 ns.Account.prototype.init = function() {

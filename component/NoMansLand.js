@@ -30,9 +30,10 @@ const uuid = require( './UuidPrefix')();
 
 var ns = {};
 
-ns.NoMansLand = function( dbPool, roomCtrl, fcReq ) {
+ns.NoMansLand = function( dbPool, userCtrl, roomCtrl, fcReq ) {
 	const self = this;
 	self.dbPool = dbPool;
+	self.userCtrl = userCtrl;
 	self.roomCtrl = roomCtrl;
 	self.fcReq = fcReq;
 	
@@ -68,6 +69,7 @@ ns.NoMansLand.prototype.close = function() {
 	self.connIds.forEach( closeClient );
 	self.connections = {};
 	delete self.db;
+	delete self.userCtrl;
 	delete self.roomCtrl;
 	delete self.fcReq;
 	
@@ -183,6 +185,7 @@ ns.NoMansLand.prototype.loginGuest = function( identity, roomId, cid ) {
 		self.roomCtrl
 	);
 	self.setAccount( account );
+	self.userCtrl.addGuest( account );
 	self.sendReady( cid );
 }
 
@@ -194,7 +197,7 @@ ns.NoMansLand.prototype.setClientAuthenticated = function( success, cid, callbac
 	
 	const auth = {
 		type : 'authenticate',
-		data : success || false,
+		data : !!success,
 	};
 	client.sendCon( auth, callback );
 }
@@ -208,7 +211,7 @@ ns.NoMansLand.prototype.setClientAccountStage = function( auth, cid ) {
 	}
 	
 	client.auth = auth;
-	client.on( 'msg', handleE );
+	client.on( 'msg', handleEvent );
 	
 	// send account challenge
 	const accE = {
@@ -217,7 +220,7 @@ ns.NoMansLand.prototype.setClientAccountStage = function( auth, cid ) {
 	};
 	client.send( accE );
 	
-	function handleE( e ) { self.handleAccountEvent( e, cid ); }
+	function handleEvent( e ) { self.handleAccountEvent( e, cid ); }
 }
 
 ns.NoMansLand.prototype.sendReady = function( cid ) {
@@ -417,6 +420,7 @@ ns.NoMansLand.prototype.setupAccount = function( conf, clientId ) {
 		self.roomCtrl
 	);
 	self.setAccount( account );
+	self.userCtrl.addAccount( account );
 }
 
 ns.NoMansLand.prototype.logAccounts = function() {
@@ -769,7 +773,7 @@ ns.NoMansLand.prototype.setAccount = function( account ) {
 	const self = this;
 	const aid = account.id;
 	if ( self.accounts[ aid ]) {
-		log( 'setAccount - account already set', account );
+		log( 'setAccount - account already set wtf', account );
 		return;
 	}
 	
@@ -789,11 +793,11 @@ ns.NoMansLand.prototype.getAccount = function( accountId ) {
 
 ns.NoMansLand.prototype.removeAccount = function( aid ) {
 	const self = this;
+	self.userCtrl.remove( aid );
 	const account = self.accounts[ aid ];
 	delete self.accounts[ aid ];
 	
 	self.logAccounts();
 }
-
 
 module.exports = ns.NoMansLand;
