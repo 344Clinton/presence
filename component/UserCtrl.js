@@ -22,15 +22,17 @@
 const log = require( './Log' )( 'UserCtrl' );
 
 const ns = {};
-ns.UserCtrl = function() {
+ns.UserCtrl = function( dbPool, worgs ) {
 	const self = this;
+	self.worgs = worgs;
+	self.db = null;
 	
 	self.accounts = {};
 	self.accIds = [];
 	self.guests = {};
 	self.guestIds = [];
 	
-	self.init();
+	self.init( dbPool );
 }
 
 // Public
@@ -44,7 +46,7 @@ ns.UserCtrl.prototype.addAccount = function( account ) {
 	
 	self.accounts[ aId ] = account;
 	self.accIds.push( aId );
-	self.organizeThings( aId );
+	self.updateAllTheThings( aId );
 }
 
 ns.UserCtrl.prototype.addGuest = function( guest ) {
@@ -63,23 +65,25 @@ ns.UserCtrl.prototype.remove = function( accountId ) {
 
 ns.UserCtrl.prototype.close = function() {
 	const self = this;
+	delete self.worgs;
 }
 
 // Private
 
-ns.UserCtrl.prototype.init = function() {
+ns.UserCtrl.prototype.init = function( dbPool ) {
 	const self = this;
 	log( ':3' );
 }
 
-ns.UserCtrl.prototype.organizeThings = function( accId ) {
+ns.UserCtrl.prototype.updateAllTheThings = function( accId ) {
 	const self = this;
 	const acc = self.accounts[ accId ];
-	if ( !acc )
-		throw new Error( 'UserCtrl.organizeThings - wft no acc' );
+	const accWorgs = acc.getWorkgroups();
+	log( 'worgs', accWorgs, 3 );
+	if ( accWorgs )
+		self.worgs.setForUser( accId, accWorgs );
 	
-	const worgs = acc.getWorkgroups();
-	log( 'worgs', worgs, 3 );
+	
 }
 
 module.exports = ns.UserCtrl;

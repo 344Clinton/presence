@@ -52,7 +52,7 @@ ns.NoMansLand.prototype.init = function() {
 	self.accEventMap = {
 		'create' : createAccount,
 		'login'  : doLogin,
-	}
+	};
 	
 	function createAccount( e, cid ) { self.createAccount( e, cid ); }
 	function doLogin( e, cid ) { self.clientLogin( e, cid ); }
