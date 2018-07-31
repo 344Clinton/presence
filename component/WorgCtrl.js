@@ -20,10 +20,14 @@
 'use strict';
 
 const log = require( './Log' )( 'WorgCtrl' );
+const Emitter = require( './Events' ).Emitter;
+const util = require( 'util' );
 const ns =  {};
 
 ns.WorgCtrl = function( dbPool ) {
 	const self = this;
+	Emitter.call( self );
+	
 	self.db = null;
 	
 	self.fMap = {}; // fId to worg mapping
@@ -32,20 +36,13 @@ ns.WorgCtrl = function( dbPool ) {
 	self.cIds = [];
 	self.worgUsers = {} // each workgroup has a list of members
 	
+	
 	self.init( dbPool );
 }
 
-// Public
+util.inherits( ns.WorgCtrl, Emitter );
 
-ns.WorgCtrl.prototype.setForUser = function( accId, worgs ) {
-	const self = this;
-	log( 'setForUser', {
-		accId : accId,
-		worgs : worgs,
-	}, 3 );
-	self.updateAvailable( worgs.available );
-	self.addUserToWorgs( accId, worg.member );
-}
+// Public
 
 ns.WorgCtrl.prototype.add = function( worg ) {
 	const self = this;
@@ -64,6 +61,7 @@ ns.WorgCtrl.prototype.add = function( worg ) {
 	self.cMap[ cId ] = worg;
 	self.fIds.push( fId );
 	self.cIds.push( cId );
+	self.worgUsers[ cId ] = [];
 	
 	return cId;
 }
@@ -76,6 +74,27 @@ ns.WorgCtrl.prototype.remove = function( clientId ) {
 ns.WorgCtrl.prototype.removeByFID = function( fId ) {
 	const self = this;
 	log( 'removeByFID', fId );
+}
+
+ns.WorgCtrl.prototype.setForUser = function( accId, worgs ) {
+	const self = this;
+	log( 'setForUser', {
+		accId : accId,
+		worgs : worgs,
+	}, 3 );
+	self.updateAvailable( worgs.available );
+	const worgList = self.addUserToWorgs( accId, worgs.member );
+	return worgList;
+}
+
+ns.WorgCtrl.prototype.getUserList = function( worgId ) {
+	const self = this;
+	return self.worgUsers[ worgId ] || [];
+}
+
+ns.WorgCtrl.removeUser = function( accId, worgId ) {
+	const self = this;
+	log( 'removeUser', [ accId, worgId ]);
 }
 
 ns.WorgCtrl.prototype.close = function() {
@@ -122,6 +141,57 @@ ns.WorgCtrl.prototype.updateAvailable = function( worgs ) {
 
 ns.WorgCtrl.prototype.addUserToWorgs = function( accId, worgs ) {
 	const self = this;
+	log( 'addUserToWorgs', worgs );
+	if ( !worgs || !worgs.length )
+		return;
+	
+	const memberMap = {};
+	const memberList = worgs.map( addTo );
+	self.cIds.forEach( removeMembership );
+	return memberList;
+	
+	function addTo( worg ) {
+		log( 'addTo', worg );
+		let wId = worg.clientId;
+		memberMap[ wId ] = true;
+		let isMember =  checkIsMemberOf( wId, accId );
+		if ( !isMember ) {
+			self.emit( 'user-add', accId, wId );
+			self.worgUsers[ wId ].push( accId );
+		}
+		
+		return wId;
+	}
+	
+	function removeMembership( worgId ) {
+		if ( memberMap[ worgId ])
+			return;
+		
+		// not a member
+		let isInList = checkIsMemberOf( worgId, accId );
+		if ( !isInList )
+			return;
+		
+		let uList = self.worgUsers[ worgId ];
+		let index = uList.indexOf( accId );
+		log( 'outdated membership', {
+			accId  : accId,
+			worgId : worgId,
+			index  : index,
+		});
+		
+		uList.splice( index, 1 );
+		self.emit( 'user-remove', accId, worgId );
+		log( 'after splice', self.worgUsers[ worgId ]);
+	}
+	
+	function checkIsMemberOf( worgId, accId ) {
+		let worg = self.worgUsers[ worgId ];
+		if ( !worg || !worg.length )
+			return false;
+		
+		return worg.some( mId => mId === accId );
+	}
 }
 
 module.exports = ns.WorgCtrl;

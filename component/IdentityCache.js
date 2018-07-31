@@ -68,6 +68,16 @@ ns.IDC.prototype.get = async function( id ) {
 	return identity;
 }
 
+ns.IDC.prototype.getList = async function( list ) {
+	const self = this;
+	log( 'getList', list );
+	return await Promise.all( list.map( await get ));
+	async function get( id ) {
+		let identity = await self.get( id );
+		return identity;
+	}
+}
+
 // Private
 
 ns.IDC.prototype.init = function( dbPool ) {

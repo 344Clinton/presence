@@ -42,6 +42,7 @@ ns.Account = function(
 	self.roomCtrl = roomCtrl;
 	
 	self.rooms = null;
+	self.contacts = [];
 	
 	self.init();
 }
@@ -66,6 +67,55 @@ ns.Account.prototype.getWorkgroups = function() {
 	const self = this;
 	//self.log( 'getWorkgroups', self.auth.workgroups, 3 );
 	return self.auth.workgroups;
+}
+
+ns.Account.prototype.setContactList = function( contacts ) {
+	const self = this;
+	self.log( 'setContactList', contacts );
+	self.contacts = contacts;
+	const cList = {
+		type : 'contact-list',
+		data : contacts,
+	};
+	self.session.send( cList );
+}
+
+ns.Account.prototype.addContact = function( contact ) {
+	const self = this;
+	self.log( 'addContact', contact );
+	if ( alreadyAdded( contact.clientId ))
+		return;
+	
+	self.contacts.push( contact );
+	const cAdd = {
+		type : 'contact-add',
+		data : contact,
+	};
+	self.session.send( cAdd );
+	
+	function alreadyAdded( clientId ) {
+		let exists = self.contacts.some( contact => {
+			if ( clientId === contact.clientId )
+				return true;
+			
+			return false;
+		});
+		
+		return exists;
+	}
+}
+
+ns.Account.prototype.removeContact = function( contactId ) {
+	const self = this;
+	self.log( 'removeContact', contactId );
+	self.contacts = self.contacts
+		.filter( contact => contactId !== contact.clientId );
+	
+	const cRemove = {
+		type : 'contact-remove',
+		data : contactId,
+	};
+	self.session.send( cRemove );
 }
 
 // Private
@@ -148,6 +198,7 @@ ns.Account.prototype.initializeClient = function( event, clientId ) {
 				auth     : self.auth,
 			},
 			rooms    : self.rooms.getRooms(),
+			contacts : self.contacts,
 		},
 	};
 	self.session.send( state, clientId );

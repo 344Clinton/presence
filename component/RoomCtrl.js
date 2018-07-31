@@ -24,17 +24,18 @@ const uuid = require( './UuidPrefix' )( 'room' );
 const Emitter = require( './Events' ).Emitter;
 const dFace = require( './DFace' );
 const Room = require( './Room' );
-const IdCache = require( './IdentityCache' );
 
 const util = require( 'util' );
 
 var ns = {};
-ns.RoomCtrl = function( dbPool ) {
+ns.RoomCtrl = function( dbPool, idCache, worgs ) {
 	const self = this;
 	
 	Emitter.call( self );
 	
 	self.dbPool = dbPool;
+	self.idCache = idCache;
+	self.worgs = worgs;
 	self.roomDb = null;
 	self.accDb = null;
 	
@@ -226,9 +227,6 @@ ns.RoomCtrl.prototype.connect = function( account, roomId, callback ) {
 // closes roomCtrl, not a room
 ns.RoomCtrl.prototype.close = function() {
 	const self = this;
-	if ( self.idCache )
-		self.idCache.close();
-		
 	if ( self.roomDb )
 		self.roomDb.close();
 	
@@ -241,6 +239,7 @@ ns.RoomCtrl.prototype.close = function() {
 	// TODO : close rooms
 	
 	delete self.idCache;
+	delete self.worgs;
 	delete self.roomDb;
 	delete self.accDb;
 	delete self.invDb;
@@ -252,7 +251,6 @@ ns.RoomCtrl.prototype.close = function() {
 ns.RoomCtrl.prototype.init = function() {
 	const self = this;
 	log( 'room ctrl init =^y^=' );
-	self.idCache = new IdCache( self.dbPool );
 	self.roomDb = new dFace.RoomDB( self.dbPool );
 	self.accDb = new dFace.AccountDB( self.dbPool );
 	self.invDb = new dFace.InviteDB( self.dbPool );

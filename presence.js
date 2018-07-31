@@ -21,6 +21,7 @@
 
 const log = require( './component/Log' )( 'init' );
 const MySQLPool = require( './component/MysqlPool' );
+const IdCache = require( './component/IdentityCache' );
 const WorgCtrl = require( './component/WorgCtrl' );
 const UserCtrl = require( './component/UserCtrl' );
 const RoomCtrl = require( './component/RoomCtrl' );
@@ -32,9 +33,10 @@ log( 'conf', global.config, 4 );
 const presence = {
 	conn  : null,
 	db    : null,
+	idc   : null,
+	worgs : null,
 	users : null,
 	rooms : null,
-	worgs : null,
 };
 
 presence.db = new MySQLPool( global.config.server.mysql, dbReady );
@@ -42,9 +44,10 @@ function dbReady( ok ) {
 	if ( !ok )
 		throw new Error( 'db failed! Run for the hills!' );
 	
+	presence.idc = new IdCache( presence.db );
 	presence.worgs = new WorgCtrl( presence.db );
-	presence.users = new UserCtrl( presence.db, presence.worgs );
-	presence.rooms = new RoomCtrl( presence.db, presence.worgs );
+	presence.users = new UserCtrl( presence.db, presence.idc, presence.worgs );
+	presence.rooms = new RoomCtrl( presence.db, presence.idc, presence.worgs );
 	openComms();
 }
 
