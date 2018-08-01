@@ -62,10 +62,11 @@ ns.UserCtrl.prototype.remove = function( accountId ) {
 		return;
 	
 	const acc = self.accounts[ accountId ];
-	const worgs = acc.getWorkgroups();
-	
 	delete self.accounts[ accountId ];
 	self.accIds = Object.keys( self.accounts );
+	
+	const worgs = acc.getWorkgroups();
+	self.worgs.removeUser( accountId );
 }
 
 ns.UserCtrl.prototype.close = function() {
@@ -111,13 +112,21 @@ ns.UserCtrl.prototype.handleWorgUserAdded = async function( accId, worgId ) {
 	}
 }
 
-ns.UserCtrl.prototype.handleWorgUserRemoved = function( accId, worgId ) {
+ns.UserCtrl.prototype.handleWorgUserRemoved = function( removedId, memberOf ) {
 	const self = this;
-	log( 'handleWorgUserRemoved', [ accId, worgId ]);
-	const worgUserList = self.worgs.getUserList( worgId );
-	worgUserList.forEach( maybeRemoveFrom );
-	function maybeRemoveFrom( accId ) {
+	log( 'handleWorgUserRemoved', [ removedId, memberOf ]);
+	memberOf.forEach( notifyOthers );
+	function notifyOthers( worgId ) {
+		const worgUsers = self.worgs.getUserList( worgId );
+		worgUsers.forEach( removeContact );
+	}
+	
+	function removeContact( accId ) {
+		let acc = self.accounts[ accId ];
+		if ( !acc )
+			return;
 		
+		acc.removeContact( removedId );
 	}
 }
 
@@ -127,9 +136,26 @@ ns.UserCtrl.prototype.updateAllTheThings = async function( accId ) {
 	const accWorgs = acc.getWorkgroups();
 	log( 'worgs', accWorgs, 3 );
 	if ( accWorgs )
-		self.worgs.setForUser( accId, accWorgs );
+		self.worgs.addUser( accId, accWorgs );
 	
-	const list = self.buildContactListFor( accId );
+	let list;
+	try {
+		list = await self.buildContactListFor( accId );
+	} catch( e ) {
+		log( 'hepp', e );
+		list = [];
+	}
+	
+	acc.setContactList( list );
+	
+}
+
+ns.UserCtrl.prototype.buildContactListFor = async function( accId ) {
+	const self = this;
+	log( 'buildContactListFor', accId );
+	const acc = self.accounts[ accId ];
+	const worgs = acc.getWorkgroups();
+	const list = self.worgs.getContactList( accId, worgs );
 	let ids;
 	try {
 		ids = await self.idc.getList( list );
@@ -137,33 +163,8 @@ ns.UserCtrl.prototype.updateAllTheThings = async function( accId ) {
 		log( 'updateAllTheThings - failed to load ids', e );
 		ids = [];
 	};
-	acc.setContactList( ids );
 	
-}
-
-ns.UserCtrl.prototype.buildContactListFor = function( accId ) {
-	const self = this;
-	log( 'buildContactListFor', accId );
-	const acc = self.accounts[ accId ];
-	const worgs = acc.getWorkgroups();
-	const member = worgs.member || [];
-	const allLists = member.map( getWorgUserList );
-	const flatted = {};
-	allLists.forEach( flatten );
-	const list = Object.keys( flatted );
-	return list;
-	
-	function getWorgUserList( worg ) {
-		let cId = worg.clientId;
-		let list = self.worgs.getUserList( cId );
-		return list;
-	}
-	
-	function flatten( list ) {
-		list.forEach( accId => {
-			flatted[ accId ] = true;
-		});
-	}
+	return ids;
 }
 
 module.exports = ns.UserCtrl;

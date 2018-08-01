@@ -35,7 +35,7 @@ ns.WorgCtrl = function( dbPool ) {
 	self.fIds = [];
 	self.cIds = [];
 	self.worgUsers = {} // each workgroup has a list of members
-	
+	self.userWorgs = {} // each user has a list of memberships
 	
 	self.init( dbPool );
 }
@@ -76,9 +76,9 @@ ns.WorgCtrl.prototype.removeByFID = function( fId ) {
 	log( 'removeByFID', fId );
 }
 
-ns.WorgCtrl.prototype.setForUser = function( accId, worgs ) {
+ns.WorgCtrl.prototype.addUser = function( accId, worgs ) {
 	const self = this;
-	log( 'setForUser', {
+	log( 'addUser', {
 		accId : accId,
 		worgs : worgs,
 	}, 3 );
@@ -92,9 +92,49 @@ ns.WorgCtrl.prototype.getUserList = function( worgId ) {
 	return self.worgUsers[ worgId ] || [];
 }
 
-ns.WorgCtrl.removeUser = function( accId, worgId ) {
+ns.WorgCtrl.prototype.getMemberOfList = function( accId ) {
 	const self = this;
-	log( 'removeUser', [ accId, worgId ]);
+	return self.userWorgs[ accId ] || [];
+}
+
+ns.WorgCtrl.prototype.getContactList = function( accId, worgs ) {
+	const self = this;
+	const member = worgs.member || [];
+	const allLists = member.map( getWorgUserList );
+	const flatted = {};
+	allLists.forEach( flatten );
+	const list = Object.keys( flatted );
+	return list;
+	
+	function getWorgUserList( worg ) {
+		let cId = worg.clientId;
+		let list = self.getUserList( cId );
+		return list;
+	}
+	
+	function flatten( list ) {
+		list.forEach( accId => {
+			flatted[ accId ] = true;
+		});
+	}
+}
+
+ns.WorgCtrl.prototype.removeUser = function( accId ) {
+	const self = this;
+	log( 'removeUser', accId );
+	let member = self.userWorgs[ accId ];
+	if ( !member || !member.length )
+		return;
+	
+	member.forEach( removeFrom );
+	delete self.userWorgs[ accId ];
+	self.emit( 'user-remove', accId, member );
+	
+	function removeFrom( worgId ) {
+		log( 'removeFrom', worgId );
+		let worg = self.worgUsers[ worgId ];
+		worg = worg.filter( wAccId => wAccId !== accId );
+	}
 }
 
 ns.WorgCtrl.prototype.close = function() {
@@ -147,6 +187,7 @@ ns.WorgCtrl.prototype.addUserToWorgs = function( accId, worgs ) {
 	
 	const memberMap = {};
 	const memberList = worgs.map( addTo );
+	self.userWorgs[ accId ] = memberList;
 	self.cIds.forEach( removeMembership );
 	return memberList;
 	
@@ -154,10 +195,10 @@ ns.WorgCtrl.prototype.addUserToWorgs = function( accId, worgs ) {
 		log( 'addTo', worg );
 		let wId = worg.clientId;
 		memberMap[ wId ] = true;
-		let isMember =  checkIsMemberOf( wId, accId );
+		let isMember =  self.checkIsMemberOf( wId, accId );
 		if ( !isMember ) {
-			self.emit( 'user-add', accId, wId );
 			self.worgUsers[ wId ].push( accId );
+			self.emit( 'user-add', accId, wId );
 		}
 		
 		return wId;
@@ -168,7 +209,7 @@ ns.WorgCtrl.prototype.addUserToWorgs = function( accId, worgs ) {
 			return;
 		
 		// not a member
-		let isInList = checkIsMemberOf( worgId, accId );
+		let isInList = self.checkIsMemberOf( worgId, accId );
 		if ( !isInList )
 			return;
 		
@@ -184,14 +225,15 @@ ns.WorgCtrl.prototype.addUserToWorgs = function( accId, worgs ) {
 		self.emit( 'user-remove', accId, worgId );
 		log( 'after splice', self.worgUsers[ worgId ]);
 	}
+}
+
+ns.WorgCtrl.prototype.checkIsMemberOf = function( worgId, accId ) {
+	const self = this;
+	let worg = self.worgUsers[ worgId ];
+	if ( !worg || !worg.length )
+		return false;
 	
-	function checkIsMemberOf( worgId, accId ) {
-		let worg = self.worgUsers[ worgId ];
-		if ( !worg || !worg.length )
-			return false;
-		
-		return worg.some( mId => mId === accId );
-	}
+	return worg.some( mId => mId === accId );
 }
 
 module.exports = ns.WorgCtrl;
