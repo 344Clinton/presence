@@ -82,7 +82,7 @@ ns.WorgCtrl.prototype.addUser = function( accId, worgs ) {
 		accId : accId,
 		worgs : worgs,
 	}, 3 );
-	self.updateAvailable( worgs.available );
+	self.updateAvailable( worgs.available || worgs.member );
 	const worgList = self.addUserToWorgs( accId, worgs.member );
 	return worgList;
 }
@@ -133,7 +133,8 @@ ns.WorgCtrl.prototype.removeUser = function( accId ) {
 	function removeFrom( worgId ) {
 		log( 'removeFrom', worgId );
 		let worg = self.worgUsers[ worgId ];
-		worg = worg.filter( wAccId => wAccId !== accId );
+		self.worgUsers[ worgId ] = worg.filter( wAccId => wAccId !== accId );
+		log( 'worg after remove', self.worgUsers[ worgId ]);
 	}
 }
 

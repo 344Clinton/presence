@@ -40,7 +40,7 @@ ns.UserCtrl = function( dbPool, idCache, worgs ) {
 
 ns.UserCtrl.prototype.addAccount = function( account ) {
 	const self = this;
-	log( 'addAccount', account );
+	log( 'addAccount', account.id );
 	let aId = account.id;
 	if ( self.accounts[ aId ])
 		return;
@@ -160,7 +160,7 @@ ns.UserCtrl.prototype.buildContactListFor = async function( accId ) {
 	try {
 		ids = await self.idc.getList( list );
 	} catch( e ) {
-		log( 'updateAllTheThings - failed to load ids', e );
+		log( 'buildContactListFor - failed to load ids', e );
 		ids = [];
 	};
 	
