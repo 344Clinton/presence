@@ -46,6 +46,7 @@ util.inherits( ns.WorgCtrl, Emitter );
 
 ns.WorgCtrl.prototype.add = function( worg ) {
 	const self = this;
+	log( 'maybe add', worg );
 	if ( !worg.fId || !worg.clientId ) {
 		log( 'add - invalid worg', worg );
 		return null;
@@ -68,7 +69,7 @@ ns.WorgCtrl.prototype.add = function( worg ) {
 
 ns.WorgCtrl.prototype.remove = function( clientId ) {
 	const self = this;
-	log( 'remove', cId );
+	log( 'remove', clientId );
 }
 
 ns.WorgCtrl.prototype.removeByFID = function( fId ) {
@@ -82,7 +83,13 @@ ns.WorgCtrl.prototype.addUser = function( accId, worgs ) {
 		accId : accId,
 		worgs : worgs,
 	}, 3 );
-	self.updateAvailable( worgs.available || worgs.member );
+	if ( worgs.available )
+		self.updateAvailable( worgs.available );
+	else {
+		if ( worgs.member && worgs.member.length )
+			worgs.member.forEach( worg => self.add( worg ));
+	}
+	
 	const worgList = self.addUserToWorgs( accId, worgs.member );
 	return worgList;
 }
@@ -152,6 +159,7 @@ ns.WorgCtrl.prototype.init = function( dbPool ) {
 
 ns.WorgCtrl.prototype.updateAvailable = function( worgs ) {
 	const self = this;
+	log( 'updateAvailable', worgs );
 	if ( !worgs || !worgs.length )
 		return;
 	
@@ -160,6 +168,7 @@ ns.WorgCtrl.prototype.updateAvailable = function( worgs ) {
 	self.cIds.forEach( removeStale );
 	
 	function addNew( worg ) {
+		log( 'addNew', worg );
 		if ( !worg.fId || !worg.clientId ) {
 			log( 'updateAvailable - invalid worg', worg );
 			return;
