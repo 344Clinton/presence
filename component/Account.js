@@ -139,6 +139,7 @@ ns.Account.prototype.init = function() {
 	self.session.on( 'room', handleRoomMsg );
 	self.session.on( 'join', joinRoom );
 	self.session.on( 'create', createRoom );
+	self.session.on( 'contact', handleContact );
 	
 	// rooms is a collection of chat rooms
 	self.rooms = new ns.Rooms( self.session );
@@ -153,6 +154,7 @@ ns.Account.prototype.init = function() {
 	function handleRoomMsg( e, cid ) { self.log( 'roomMsg', msg ); }
 	function joinRoom( e, cid ) { self.joinRoom( e, cid ); }
 	function createRoom( e, cid ) { self.createRoom( e, cid ); }
+	function handleContact( e, cid ) { self.handleContact( e, cid ); }
 	
 	function roomClosed( e ) { self.handleRoomClosed( e ); }
 	//function joinedRoom( e, rid ) { self.handleJoinedRoom( e, rid ); }
@@ -398,6 +400,11 @@ ns.Account.prototype.handleRoomClosed = function( roomId ) {
 		data : roomId,
 	};
 	self.session.send( close );
+}
+
+ns.Account.prototype.handleContact = function( event, clientId ) {
+	const self = this;
+	self.log( 'handleContact', event );
 }
 
 ns.Account.prototype.logout = function( callback ) {
