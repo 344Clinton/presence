@@ -120,7 +120,7 @@ ns.UserSend.prototype.sendInit = function() {
 
 
 */
-ns.Room = function( conf, db, idCache ) {
+ns.Room = function( conf, db, idCache, worgCtrl ) {
 	const self = this;
 	if ( !conf.clientId )
 		throw new Error( 'Room - clientId missing' );
@@ -135,8 +135,11 @@ ns.Room = function( conf, db, idCache ) {
 	
 	self.open = false;
 	self.invite = null;
+	self.log = null;
 	self.chat = null;
 	self.live = null;
+	self.worgs = null;
+	self.settings = null;
 	self.users = {};
 	self.identities = {};
 	self.onlineList = [];
@@ -148,7 +151,7 @@ ns.Room = function( conf, db, idCache ) {
 	
 	Emitter.call( self );
 	
-	self.init();
+	self.init( worgCtrl );
 }
 
 util.inherits( ns.Room, Emitter );
@@ -158,7 +161,6 @@ util.inherits( ns.Room, Emitter );
 // when users come online
 ns.Room.prototype.connect = function( account ) {
 	const self = this;
-	self.processWorkgroups( account );
 	const signal = self.bindUser( account );
 	if ( self.emptyTimer ) {
 		clearTimeout( self.emptyTimer );
@@ -224,17 +226,18 @@ ns.Room.prototype.addUser = function( user, callback ) {
 	
 	function announceUser( user ) {
 		// tell peoples
-		var joinEvent = {
+		const aId = user.accountId;
+		const joinEvent = {
 			type : 'join',
 			data : {
-				clientId   : user.accountId,
+				clientId   : aId,
 				name       : user.accountName,
 				avatar     : user.avatar,
 				owner      : user.accountId === self.ownerId,
 				admin      : user.admin || undefined,
 				authed     : user.authed || undefined,
 				guest      : user.guest || undefined,
-				workgroups : user.workgroups || undefined,
+				workgroups : self.worgs.getUserWorkgroups( aId ),
 			},
 		};
 		self.broadcast( joinEvent, uid );
@@ -278,7 +281,12 @@ ns.Room.prototype.removeUser = function( accountId ) {
 
 ns.Room.prototype.authenticateInvite = async function( token ) {
 	const self = this;
-	const valid = await self.invite.authenticate( token );
+	let valid = false;
+	try {
+		valid = await self.invite.authenticate( token );
+	} catch ( e ) {
+		log( 'authenticateInvite - failed', e );
+	}
 	return valid;
 }
 
@@ -332,7 +340,7 @@ ns.Room.prototype.close = function( callback ) {
 
 // Private
 
-ns.Room.prototype.init = function() {
+ns.Room.prototype.init = function( worgCtrl ) {
 	const self = this;
 	self.roomDb = new dFace.RoomDB( self.dbPool, self.id );
 	
@@ -351,17 +359,17 @@ ns.Room.prototype.init = function() {
 	
 	function settingsDone( err , res ) {
 		self.worgs = new ns.Workgroup(
+			worgCtrl,
 			self.dbPool,
 			self.id,
 			self.users,
 			self.onlineList,
 			self.settings,
-			removeUser
 		);
+		self.worgs.on( 'remove-user', removeUser );
 		self.worgs.on( 'dismissed', worgDismissed );
 		self.worgs.on( 'assigned', worgAssigned );
 		
-		// for when a workgroup is dismissed, refactor to use dismissed event
 		function removeUser( userId ){ self.removeUser( userId ); }
 		function worgDismissed( e ) { self.handleWorkgroupDismissed( e ); }
 		function worgAssigned( e ) { self.emit( 'workgroup-assigned', e ); }
@@ -485,19 +493,6 @@ ns.Room.prototype.loadUsers = function() {
 	}
 }
 
-ns.Room.prototype.processWorkgroups = function( user ) {
-	const self = this;
-	if ( !user.workgroups || !user.workgroups.member )
-		return;
-	
-	const wgs = user.workgroups;
-	self.worgs.add( wgs.available || wgs.member );
-	if ( wgs.stream )
-		self.worgs.addStream( wgs.stream );
-	
-	user.workgroups = wgs.member.map( wg => wg.clientId );
-}
-
 ns.Room.prototype.checkOnline = function() {
 	const self = this;
 	if ( 0 !== self.onlineList.length )
@@ -560,7 +555,6 @@ ns.Room.prototype.bindUser = function( account ) {
 		admin       : account.admin, // <-- using account
 		authed      : account.authed || conf.authed || false,
 		guest       : conf.guest,
-		workgroups  : account.workgroups || conf.workgroups || [],
 	};
 	const user = new Signal( sigConf );
 	self.users[ userId ] = user;
@@ -635,7 +629,7 @@ ns.Room.prototype.initialize =  function( requestId, userId ) {
 				admin      : user.admin,
 				authed     : user.authed,
 				guest      : user.guest,
-				workgroups : user.workgroups,
+				workgroups : self.worgs.getUserWorkgroups( aId ),
 			};
 		}
 	}
@@ -738,14 +732,19 @@ ns.Room.prototype.revokeAuthorization = function( userId, callback ) {
 	
 	function revokeDone( res ) {
 		self.authorized = self.authorized.filter( uid => userId !== uid );
-		if ( callback )
-			callback( null, userId );
+		done( null, res );
 	}
 	
 	function revokeFailed( err ) {
 		log( 'revokeAuthorization - err', err.stack || err );
+		done( err, null );
+	}
+	
+	function done( err, res ) {
+		const user = self.users[ uid ];
+		user.authed = false;
 		if ( callback )
-			callback( err, null );
+			callback( err, userId );
 	}
 }
 
@@ -828,7 +827,7 @@ ns.Room.prototype.setOnline = function( userId ) {
 			clientId   : userId,
 			admin      : user.admin || false,
 			authed     : user.authed || false,
-			workgroups : user.workgroups || [],
+			workgroups : self.worgs.getUserWorkgroups( userId ),
 		}
 	};
 	self.broadcast( online );
@@ -849,7 +848,6 @@ ns.Room.prototype.setOffline = function( userId ) {
 		admin        : user.admin,
 		authed       : user.authed,
 		guest        : user.guest,
-		workgroups   : user.workgroups,
 	};
 	
 	const userIndex = self.onlineList.indexOf( userId );
@@ -876,8 +874,11 @@ ns.Room.prototype.handleLeave = function( uid ) {
 	function authBack( isAuthorized ) {
 		if ( isAuthorized )
 			self.revokeAuthorization( uid, revokeBack );
-		else
+		else {
+			const user = self.users[ uid ];
+			user.authed = false;
 			checkHasWorkgroup( uid );
+		}
 	}
 	
 	function revokeBack( err, revokeUid ) {
@@ -894,15 +895,8 @@ ns.Room.prototype.handleLeave = function( uid ) {
 		// if so, dont close connection and move user to workgroup ( in ui )
 		// else close
 		const user = self.users[ uid ];
-		user.authed = false;
 		if ( !user )
 			return;
-		
-		let wgs = user.workgroups;
-		if ( !wgs || !wgs.length ) {
-			disconnect( uid );
-			return;
-		}
 		
 		let ass = self.worgs.getAssignedForUser( uid );
 		if ( !ass || !ass.length )
@@ -1273,7 +1267,7 @@ ns.Live.prototype.add = function( userId ) { //adds user to existing room
 		}
 		
 		if ( !self.sourceId ) {
-			let isStreamer = self.worgs.isStreamer( user.workgroups );
+			let isStreamer = self.worgs.isStreamer( userId );
 			if ( isStreamer ) {
 				self.sourceId = userId;
 				self.proxy.set_source( userId );
@@ -1374,7 +1368,7 @@ ns.Live.prototype.close = function( callback ) {
 	delete self.users;
 	delete self.onlineList;
 	delete self.log;
-	delete self.workgroups;
+	delete self.worgs;
 	delete self.settings;
 	delete self.peers;
 	delete self.peerIds;
@@ -2688,16 +2682,17 @@ ns.Log.prototype.updateInLog = function( event ) {
 
 let wLog = require( './Log' )( 'Room > Workgroup' );
 ns.Workgroup = function(
+	worgCtrl,
 	dbPool,
 	roomId,
 	users,
 	onlineList,
 	settings,
-	removeUser
  ) {
 	const self = this;
 	Emitter.call( self );
 	
+	self.worgCtrl = worgCtrl;
 	self.roomId = roomId;
 	self.users = users;
 	self.onlineList = onlineList;
@@ -2710,7 +2705,6 @@ ns.Workgroup = function(
 	self.assigned = {};
 	self.stream = [];
 	self.streamIds = [];
-	self.removeUser = removeUser; // callback to remove user from Room
 	
 	self.init( dbPool );
 }
@@ -2718,40 +2712,6 @@ ns.Workgroup = function(
 util.inherits( ns.Workgroup, Emitter );
 
 // 
-
-ns.Workgroup.prototype.add = function( wgs ) {
-	const self = this;
-	if ( !wgs || !wgs.length )
-		return;
-	
-	let added = wgs
-		.map( add )
-		.filter( notNull );
-	
-	if ( added.length )
-		updateData();
-	
-	self.updateSettings();
-	return added;
-	
-	function add( wg ) {
-		if ( self.groups[ wg.clientId ] )
-			return null;
-		
-		self.groups[ wg.clientId ] = wg;
-		return wg;
-	}
-	
-	function notNull( wg ) {
-		return !!wg;
-	}
-	
-	function updateData() {
-		self.ids = Object.keys( self.groups );
-		self.list = self.ids.map( wgId  => self.groups[ wgId ]);
-		self.updateClients();
-	}
-}
 
 ns.Workgroup.prototype.addStream = function( streamWgs ) {
 	const self = this;
@@ -2768,26 +2728,32 @@ ns.Workgroup.prototype.addStream = function( streamWgs ) {
 	}).map( wg => wg.clientId );
 }
 
-ns.Workgroup.prototype.isStreamer = function( userWgs ) {
+ns.Workgroup.prototype.getUserWorkgroups = function( userId ) {
 	const self = this;
-	let isStreamer = userWgs.some( uwgId => {
-		return self.streamIds.some( sId => uwgId === sId );
-	});
-	
+	return self.worgCtrl.getMemberOfList( userId );
+}
+
+ns.Workgroup.prototype.isStreamer = function( userId ) {
+	const self = this;
+	let isStreamer = self.worgCtrl.checkUserIsStreamerFor( userId, self.ids )
 	return isStreamer;
 }
 
 ns.Workgroup.prototype.getAvailable = function() {
 	const self = this;
-	return self.list;
+	const ava = self.worgCtrl.get();
+	wLog( 'getAvailable', ava );
+	return ava;
 }
 
 ns.Workgroup.prototype.getAssigned = function() {
 	const self = this;
+	return [];
+	
 	return self.list
 		.filter( isAssigned )
 		.map( addInfo );
-		
+	
 	function isAssigned( wg ) {
 		return !!self.assigned[ wg.fId ];
 	}
@@ -2946,6 +2912,7 @@ ns.Workgroup.prototype.close = function() {
 	if ( self.db )
 		self.db.close();
 	
+	delete self.worgCtrl;
 	delete self.roomId;
 	delete self.conn;
 	delete self.db;
@@ -2957,7 +2924,6 @@ ns.Workgroup.prototype.close = function() {
 	delete self.list;
 	delete self.stream;
 	delete self.streamIds;
-	delete self.removeUser;
 }
 
 // private
@@ -2971,6 +2937,7 @@ ns.Workgroup.prototype.init = function( dbPool ) {
 		.catch( loadErr );
 	
 	function wgs( res ) {
+		wLog( 'assigned wgs', res );
 		self.setAssigned( res );
 		self.updateSettings();
 	};
@@ -3027,7 +2994,8 @@ ns.Workgroup.prototype.removeDismissed = function( fId ) {
 ns.Workgroup.prototype.removeUsers = function() {
 	const self = this;
 	let toBeRemoved = self.onlineList.filter( checkHasAssigned );
-	toBeRemoved.forEach( uid => self.removeUser( uid ));
+	toBeRemoved.forEach( uid => self.emit( 'remove-user', uid ));
+	
 	function checkHasAssigned( userId ) {
 		let user = self.users[ userId ];
 		if ( user.authed )

@@ -34,8 +34,9 @@ ns.WorgCtrl = function( dbPool ) {
 	self.cMap = {}; // clientId to worg mapping
 	self.fIds = [];
 	self.cIds = [];
-	self.worgUsers = {} // each workgroup has a list of members
-	self.userWorgs = {} // each user has a list of memberships
+	self.worgUsers = {}; // each workgroup has a list of members.
+	self.userWorgs = {}; // each user has a list of memberships.
+	self.streamers = {}; // each streamer has a list of streamWorgs
 	
 	self.init( dbPool );
 }
@@ -67,6 +68,26 @@ ns.WorgCtrl.prototype.add = function( worg ) {
 	return cId;
 }
 
+ns.WorgCtrl.prototype.get = function() {
+	const self = this;
+	return self.cMap;
+}
+
+ns.WorgCtrl.prototype.getList = function() {
+	const self = this;
+	return self.cIds;
+}
+
+ns.WorgCtrl.prototype.resolveList = function( worgIds ) {
+	const self = this;
+	log( 'resolveList', worgIds );
+	const worgs = {};
+	worgIds.forEach( wId => {
+		worgs[ wId ] = self.cMap[ wId ];
+	});
+	return worgs;
+}
+
 ns.WorgCtrl.prototype.remove = function( clientId ) {
 	const self = this;
 	log( 'remove', clientId );
@@ -83,15 +104,25 @@ ns.WorgCtrl.prototype.addUser = function( accId, worgs ) {
 		accId : accId,
 		worgs : worgs,
 	}, 3 );
-	if ( worgs.available )
-		self.updateAvailable( worgs.available );
-	else {
-		if ( worgs.member && worgs.member.length )
-			worgs.member.forEach( worg => self.add( worg ));
+	addNewWorgs( worgs );
+	registerUser( accId, worgs );
+	
+	function addNewWorgs( worgs ) {
+		if ( worgs.available )
+			self.updateAvailable( worgs.available );
+		else {
+			if ( worgs.member && worgs.member.length )
+				worgs.member.forEach( worg => self.add( worg ));
+		}
 	}
 	
-	const worgList = self.addUserToWorgs( accId, worgs.member );
-	return worgList;
+	function registerUser( accId, worgs ) {
+		if ( worgs.member )
+			self.updateUserWorgs( accId, worgs.member );
+		
+		if ( worgs.stream )
+			self.updateStreamWorgs( accId, worgs.stream );
+	}
 }
 
 ns.WorgCtrl.prototype.getUserList = function( worgId ) {
@@ -135,6 +166,7 @@ ns.WorgCtrl.prototype.removeUser = function( accId ) {
 	
 	member.forEach( removeFrom );
 	delete self.userWorgs[ accId ];
+	delete self.streamers[ accId ];
 	self.emit( 'user-remove', accId, member );
 	
 	function removeFrom( worgId ) {
@@ -143,6 +175,24 @@ ns.WorgCtrl.prototype.removeUser = function( accId ) {
 		self.worgUsers[ worgId ] = worg.filter( wAccId => wAccId !== accId );
 		log( 'worg after remove', self.worgUsers[ worgId ]);
 	}
+}
+
+ns.WorgCtrl.prototype.checkUserIsStreamerFor = function( accId, worgList ) {
+	const self = this;
+	const streamer = self.streamers[ accId ];
+	if ( !streamer )
+		return false;
+	
+	const isStreamer = streamer.some( streamerWorgId => {
+		return worgList.some( listWorgId => listWorgId === streamerWorgId );
+	});
+	
+	return isStreamer;
+}
+
+ns.WorgCtrl.prototype.removeStreamWorkgroup = function( worgId ) {
+	const self = this;
+	log( 'removeStreamWorkgroup', worgId );
 }
 
 ns.WorgCtrl.prototype.close = function() {
@@ -189,9 +239,9 @@ ns.WorgCtrl.prototype.updateAvailable = function( worgs ) {
 	}
 }
 
-ns.WorgCtrl.prototype.addUserToWorgs = function( accId, worgs ) {
+ns.WorgCtrl.prototype.updateUserWorgs = function( accId, worgs ) {
 	const self = this;
-	log( 'addUserToWorgs', worgs );
+	log( 'updateUserWorgs', worgs );
 	if ( !worgs || !worgs.length )
 		return;
 	
@@ -234,6 +284,89 @@ ns.WorgCtrl.prototype.addUserToWorgs = function( accId, worgs ) {
 		uList.splice( index, 1 );
 		self.emit( 'user-remove', accId, worgId );
 		log( 'after splice', self.worgUsers[ worgId ]);
+	}
+}
+
+ns.WorgCtrl.prototype.updateStreamWorgs = function( accId, streamWorgNames ) {
+	const self = this;
+	console.log( 'updateStreamWorgs', streamWorgNames );
+	if ( !streamWorgNames || !streamWorgNames.length )
+		return;
+	
+	const current = {};
+	const added = [];
+	streamWorgNames.forEach( addMaybe );
+	// TODO emit added probably
+	const remove = self.streamWorgs.filter( isStale );
+	remove.forEach( wId => self.removeStreamWorg( wId ));
+	
+	function addMaybe( worgName ) {
+		let worg = self.getWorgByName( worgName );
+		if ( !worg )
+			return;
+		
+		let wId = worg.clientId;
+		current[ wId ] = true;
+		if ( !isSet( wId )) {
+			self.addStreamWorg( wId );
+			added.push( wId );
+		}
+	}
+	
+	function isSet( worgId ) {
+		return self.streamWorgs.some( streamWorgId => worgId === streamWorgId );
+	}
+	
+	function isStale( streamWorgId ) {
+		return !current[ streamWorgId ];
+	}
+}
+
+ns.WorgCtrl.prototype.getWorgByName = function( worgName ) {
+	const self = this;
+	log( 'getWorgByName', worgName );
+	let namedWorg = null;
+	self.cIds.some( lookup );
+	return namedWorg;
+	
+	function lookup( wId ) {
+		let worg = self.cMap[ wId ];
+		if ( worgName === worg.name ) {
+			namedWorg = worg;
+			return true;
+		}
+		
+		return false;
+	};
+}
+
+ns.WorgCtrl.prototype.addStreamWorg = function( worgId ) {
+	const self = this;
+	self.streamWorgs.push( worgId );
+	let userList = self.getUserList( worgId );
+	userList.forEach( accId => self.setStreamer( accId, worgId ));
+}
+
+ns.WorgCtrl.prototype.setStreamer = function( accId, worgId ) {
+	const self = this;
+	if ( !self.streamers[ accId ])
+		setNew( accId, worgId );
+	else
+		addToExistingMaybe( accId, worgId );
+	
+	function setNew( accId ) {
+		self.streamers[ accId ] = [
+			worgId,
+		];
+	}
+	
+	function addToExistingMaybe( accId, worgId ) {
+		let streamer = self.streamers[ accId ];
+		let added = streamer.some( wId => wId === worgId );
+		if ( added )
+			return;
+		
+		streamer.push( worgId );
 	}
 }
 

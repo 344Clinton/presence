@@ -38,7 +38,7 @@ ns.UserCtrl = function( dbPool, idCache, worgs ) {
 
 // Public
 
-ns.UserCtrl.prototype.addAccount = function( account ) {
+ns.UserCtrl.prototype.addAccount = async function( account ) {
 	const self = this;
 	log( 'addAccount', account.id );
 	let aId = account.id;
@@ -47,7 +47,11 @@ ns.UserCtrl.prototype.addAccount = function( account ) {
 	
 	self.accounts[ aId ] = account;
 	self.accIds.push( aId );
-	self.updateAllTheThings( aId );
+	try {
+		await self.updateAllTheThings( aId );
+	} catch( err ) {
+		log( 'addAccount - updateallthethings borked', err );
+	}
 }
 
 ns.UserCtrl.prototype.addGuest = function( guest ) {
@@ -96,11 +100,6 @@ ns.UserCtrl.prototype.handleWorgUserAdded = async function( accId, worgId ) {
 	} catch( e ) {
 		log( 'failed to load id', e );
 	}
-	
-	log( 'handleworguseradded - the things', {
-		userList : worgUserList,
-		id       : addedIdentity,
-	});
 	
 	worgUserList.forEach( addTo );
 	function addTo( accId ) {
@@ -153,8 +152,7 @@ ns.UserCtrl.prototype.updateAllTheThings = async function( accId ) {
 ns.UserCtrl.prototype.buildContactListFor = async function( accId ) {
 	const self = this;
 	log( 'buildContactListFor', accId );
-	const acc = self.accounts[ accId ];
-	const worgs = acc.getWorkgroups();
+	const worgs = self.worgs.getMemberOfList( accId );
 	const list = self.worgs.getContactList( accId, worgs );
 	let ids;
 	try {

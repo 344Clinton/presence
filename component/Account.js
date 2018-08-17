@@ -71,7 +71,6 @@ ns.Account.prototype.getWorkgroups = function() {
 
 ns.Account.prototype.setContactList = function( contacts ) {
 	const self = this;
-	self.log( 'setContactList', contacts );
 	self.contacts = contacts;
 	const cList = {
 		type : 'contact-list',
@@ -82,7 +81,6 @@ ns.Account.prototype.setContactList = function( contacts ) {
 
 ns.Account.prototype.addContact = function( contact ) {
 	const self = this;
-	self.log( 'addContact', contact );
 	if ( alreadyAdded( contact.clientId ))
 		return;
 	
@@ -107,7 +105,6 @@ ns.Account.prototype.addContact = function( contact ) {
 
 ns.Account.prototype.removeContact = function( contactId ) {
 	const self = this;
-	self.log( 'removeContact', contactId );
 	self.contacts = self.contacts
 		.filter( contact => contactId !== contact.clientId );
 	

@@ -364,7 +364,12 @@ ns.RoomCtrl.prototype.setRoom = function( roomConf ) {
 	return new Promise( openRoom );
 	function openRoom( resolve, reject ) {
 		const roomId = roomConf.clientId;
-		const room = new Room( roomConf, self.dbPool, self.idCache );
+		const room = new Room(
+			roomConf,
+			self.dbPool,
+			self.idCache,
+			self.worgs
+		);
 		
 		room.once( 'open', onOpen );
 		self.bindRoom( room );
