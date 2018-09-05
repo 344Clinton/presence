@@ -94,6 +94,7 @@ ns.UserCtrl.prototype.handleWorgUserAdded = async function( accId, worgId ) {
 	const self = this;
 	log( 'handleworgUserAdded', [ accId, worgId ]);
 	let worgUserList = self.worgs.getUserList( worgId );
+	log( 'handleAdded - userlist', worgUserList );
 	let addedIdentity = null;
 	try {
 		addedIdentity = await self.idc.get( accId );
@@ -146,14 +147,12 @@ ns.UserCtrl.prototype.updateAllTheThings = async function( accId ) {
 	}
 	
 	acc.setContactList( list );
-	
 }
 
 ns.UserCtrl.prototype.buildContactListFor = async function( accId ) {
 	const self = this;
 	log( 'buildContactListFor', accId );
-	const worgs = self.worgs.getMemberOfList( accId );
-	const list = self.worgs.getContactList( accId, worgs );
+	const list = self.worgs.getContactList( accId );
 	let ids;
 	try {
 		ids = await self.idc.getList( list );

@@ -206,7 +206,6 @@ ns.Room.prototype.addUser = function( user, callback ) {
 	if ( !self.persistent && !user.guest )
 		user.authed = true;
 	
-	self.processWorkgroups( user );
 	self.users[ uid ] = user;
 	
 	if ( !user.avatar && !user.guest ) {
@@ -237,7 +236,7 @@ ns.Room.prototype.addUser = function( user, callback ) {
 				admin      : user.admin || undefined,
 				authed     : user.authed || undefined,
 				guest      : user.guest || undefined,
-				workgroups : self.worgs.getUserWorkgroups( aId ),
+				workgroups : self.worgs.getUserWorkgroupList( aId ),
 			},
 		};
 		self.broadcast( joinEvent, uid );
@@ -346,6 +345,7 @@ ns.Room.prototype.init = function( worgCtrl ) {
 	
 	self.settings = new ns.Settings(
 		self.dbPool,
+		worgCtrl,
 		self.id,
 		self.users,
 		self.onlineList,
@@ -630,7 +630,7 @@ ns.Room.prototype.initialize =  function( requestId, userId ) {
 				admin      : user.admin,
 				authed     : user.authed,
 				guest      : user.guest,
-				workgroups : self.worgs.getUserWorkgroups( aId ),
+				workgroups : self.worgs.getUserWorkgroupList( aId ),
 			};
 		}
 	}
@@ -742,8 +742,10 @@ ns.Room.prototype.revokeAuthorization = function( userId, callback ) {
 	}
 	
 	function done( err, res ) {
-		const user = self.users[ uid ];
-		user.authed = false;
+		const user = self.users[ userId ];
+		if ( user )
+			user.authed = false;
+		
 		if ( callback )
 			callback( err, userId );
 	}
@@ -828,7 +830,7 @@ ns.Room.prototype.setOnline = function( userId ) {
 			clientId   : userId,
 			admin      : user.admin || false,
 			authed     : user.authed || false,
-			workgroups : self.worgs.getUserWorkgroups( userId ),
+			workgroups : self.worgs.getUserWorkgroupList( userId ),
 		}
 	};
 	self.broadcast( online );
@@ -2700,12 +2702,9 @@ ns.Workgroup = function(
 	self.settings = settings;
 	
 	self.db = null;
-	self.groups = {};
-	self.ids = [];
-	self.list = [];
+	self.fIds = [];
+	self.cIds = [];
 	self.assigned = {};
-	self.stream = [];
-	self.streamIds = [];
 	
 	self.init( dbPool );
 }
@@ -2714,80 +2713,52 @@ util.inherits( ns.Workgroup, Emitter );
 
 // 
 
-ns.Workgroup.prototype.addStream = function( streamWgs ) {
+ns.Workgroup.prototype.getUserWorkgroupList = function( userId ) {
 	const self = this;
-	streamWgs = streamWgs.filter( newWg => {
-		return !self.stream.some( currentWg => newWg === currentWg );
-	});
-	if ( !streamWgs.length )
-		return;
-	
-	self.stream = streamWgs;
-	self.streamIds = self.list.filter( wg => {
-		let wgName = wg.name;
-		return streamWgs.some( streamWgName => streamWgName === wgName );
-	}).map( wg => wg.clientId );
-}
-
-ns.Workgroup.prototype.getUserWorkgroups = function( userId ) {
-	const self = this;
-	return self.worgCtrl.getMemberOfList( userId );
+	const uwgs = self.worgCtrl.getMemberOfList( userId );
+	return uwgs;
 }
 
 ns.Workgroup.prototype.isStreamer = function( userId ) {
 	const self = this;
-	let isStreamer = self.worgCtrl.checkUserIsStreamerFor( userId, self.ids )
+	const isStreamer = self.worgCtrl.checkUserIsStreamerFor( userId, self.cIds );
 	return isStreamer;
 }
 
 ns.Workgroup.prototype.getAvailable = function() {
 	const self = this;
-	const ava = self.worgCtrl.get();
-	wLog( 'getAvailable', ava );
-	return ava;
+	return self.worgCtrl.get();
 }
 
 ns.Workgroup.prototype.getAssigned = function() {
 	const self = this;
-	return [];
+	wLog( 'getAssigned', self.fIds );
+	return self.fIds.map( addInfo );
 	
-	return self.list
-		.filter( isAssigned )
-		.map( addInfo );
-	
-	function isAssigned( wg ) {
-		return !!self.assigned[ wg.fId ];
-	}
-	
-	function addInfo( wg ) {
-		let ass = self.assigned[ wg.fId ];
-		wg.setById = ass.setById;
-		wg.setTime = ass.setTime;
-		return wg;
+	function addInfo( fId ) {
+		let ass = self.assigned[ fId ];
+		let wg = self.worgCtrl.getByFId( fId );
+		ass.clientId = wg.clientId;
+		ass.name = wg.name;
+		return ass;
 	}
 }
 
 ns.Workgroup.prototype.getAssignedClientIds = function() {
 	const self = this;
-	const assigned = self.getAssigned();
-	return assigned.map( item => item.clientId );
+	wLog( 'getAssignedClientIds', self.fIds );
+	return self.cIds;
 }
 
 ns.Workgroup.prototype.getAssignedForUser = function( userId ) {
 	const self = this;
-	const user = self.users[ userId ];
-	if ( !user ) {
-		wLog( 'getAssignedfor - user', user );
-		return null;
-	}
-	
-	const uwgs = user.workgroups;
+	const uwgs = self.worgCtrl.getMemberOfList( userId );
 	if ( !uwgs || !uwgs.length )
 		return [];
 	
 	const ass = self.getAssignedClientIds();
 	const userAss = ass.filter( userIsMember );
-	
+	wLog( 'getAssignedForUser', userId );
 	return userAss;
 	
 	function userIsMember( aId ) {
@@ -2795,28 +2766,31 @@ ns.Workgroup.prototype.getAssignedForUser = function( userId ) {
 	}
 }
 
-// Update assigned workgroups on room (item)
 ns.Workgroup.prototype.updateAssigned = function( item, userId ) {
 	const self = this;
-	let err = getValid( item );
-	if ( err ) {
-		sendErr( item, userId );
+	wLog( 'updateAssigned', [ item, userId ]);
+	if ( !item || !item.clientId ) {
+		sendErr( 'ERR_NO_CLIENTID', userId );
 		return;
 	}
 	
 	const cId = item.clientId;
-	const worg = self.groups[ cId ];
+	const worg = self.worgCtrl.get( cId );
+	if ( !worg ) {
+		sendErr( 'ERR_NO_GROUP', userId );
+		return;
+	}
+	
 	const fId = worg.fId;
 	if ( true === item.value )
 		assign();
 	else
 		dismiss();
 	
-	self.updateSettings();
-	
 	// Assign workgroup to room
 	function assign() {
 		if ( self.assigned[ fId ]) {
+			wLog( 'assign - already assigned', self.assigned );
 			sendOk( item, userId );
 			return;
 		}
@@ -2861,26 +2835,16 @@ ns.Workgroup.prototype.updateAssigned = function( item, userId ) {
 		}
 	}
 	
-	function getValid( item ) {
-		if ( !item || !item.clientId )
-			return 'ERR_NO_CLIENTID';
-		
-		const group = self.groups[ item.clientId ];
-		if ( !group )
-			return 'ERR_NO_GROUP';
-		
-		return null;
-	}
-	
 	function dbErr( err ) {
 		wLog( 'dbErr', err );
 	}
 	
 	function sendOk( item, userId ) {
 		self.settings.sendSaved( 'workgroups', item, true, userId );
+		self.updateSettings();
 	}
 	
-	function sendErr( item, err, userId ) {
+	function sendErr( err, userId ) {
 		self.settings.sendError( 'workgroups', err, userId );
 	}
 }
@@ -2913,6 +2877,19 @@ ns.Workgroup.prototype.close = function() {
 	if ( self.db )
 		self.db.close();
 	
+	
+	if ( self.worgCtrl ) {
+		if ( self.onWorgAddId ) {
+			self.worgCtrl.off( self.onWorgAddId );
+			self.onWorgAddId = null;
+		}
+		
+		if ( self.onWorgRemoveId ) {
+			self.worgCtrl.off( self.onWorgRemoveId );
+			self.onWorgRemoveId = null;
+		}
+	}
+	
 	delete self.worgCtrl;
 	delete self.roomId;
 	delete self.conn;
@@ -2921,7 +2898,7 @@ ns.Workgroup.prototype.close = function() {
 	delete self.onlineList;
 	delete self.settings;
 	delete self.groups;
-	delete self.ids;
+	delete self.fIds;
 	delete self.list;
 	delete self.stream;
 	delete self.streamIds;
@@ -2932,6 +2909,15 @@ ns.Workgroup.prototype.close = function() {
 ns.Workgroup.prototype.init = function( dbPool ) {
 	const self = this;
 	self.conn = new ns.UserSend( 'workgroup', self.users, self.onlineList );
+	
+	/*
+	self.onWorgAddId = self.worgCtrl.on( 'available', worgAvailable );
+	self.onWorgRemoveId = self.worgCtrl.on( 'removed', worgRemoved );
+	
+	function worgAvailable( e ) { self.handleWorgAvailable( e ); }
+	function worgRemoved( e ) { self.handleWorgRemoved( e ); }
+	*/
+	
 	self.db = new dFace.RoomDB( dbPool, self.roomId );
 	self.db.getAssignedWorkgroups()
 		.then( wgs )
@@ -2956,16 +2942,31 @@ ns.Workgroup.prototype.init = function( dbPool ) {
 ns.Workgroup.prototype.setAssigned = function( dbWorgs ) {
 	const self = this;
 	dbWorgs.forEach( add );
+	self.fIds = Object.keys( self.assigned );
+	self.cIds = self.fIds.map( fId => {
+		let wg = self.worgCtrl.getByFId( fId );
+		return wg.clientId;
+	});
+	
 	function add( wg ) {
 		self.assigned[ wg.fId ] = wg;
 	}
 }
 
+ns.Workgroup.prototype.handleWorgAvailable = function( worgId ) {
+	const self = this;
+	wLog( 'handleWorgAvailable', worgId );
+}
+
+ns.Workgroup.prototype.handleWorgRemoved = function( worgId ) {
+	const self = this;
+	wLog( 'handleWorgRemoved', worgId );
+}
+
 ns.Workgroup.prototype.updateSettings = function() {
 	const self = this;
-	let available = self.getAvailable();
 	let assigned = self.getAssignedClientIds();
-	self.settings.updateWorkgroups( available, assigned );
+	self.settings.updateWorkgroups( assigned );
 }
 
 ns.Workgroup.prototype.updateClients = function() {
@@ -2979,7 +2980,13 @@ ns.Workgroup.prototype.updateClients = function() {
 
 ns.Workgroup.prototype.addAssigned = function( dbWorg ) {
 	const self = this;
-	self.assigned[ dbWorg.fId ] = dbWorg;
+	const fId = dbWorg.fId;
+	const worg = self.worgCtrl.getByFId( fId );
+	const cId = worg.clientId;
+	self.assigned[ fId ] = dbWorg;
+	self.fIds.push( fId );
+	self.cIds.push( cId );
+	
 	const update = {
 		type : 'assigned',
 		data : self.getAssigned(),
@@ -2990,6 +2997,11 @@ ns.Workgroup.prototype.addAssigned = function( dbWorg ) {
 ns.Workgroup.prototype.removeDismissed = function( fId ) {
 	const self = this;
 	delete self.assigned[ fId ];
+	self.fIds = Object.keys( self.assigned );
+	self.cIds = self.fIds.map( fId => {
+		let worg = self.worgCtrl.getByFId( fId );
+		return worg.clientId;
+	});
 }
 
 ns.Workgroup.prototype.removeUsers = function() {
@@ -3013,6 +3025,7 @@ ns.Workgroup.prototype.removeUsers = function() {
 const sLog = require( './Log' )( 'Room > Settings' );
 ns.Settings = function(
 	dbPool,
+	worgCtrl,
 	roomId,
 	users,
 	onlineList,
@@ -3024,6 +3037,7 @@ ns.Settings = function(
 	Emitter.call( self );
 	
 	self.roomId = roomId;
+	self.worgCtrl = worgCtrl;
 	self.users = users;
 	self.onlineList = onlineList;
 	self.isPersistent = isPersistent;
@@ -3052,10 +3066,11 @@ ns.Settings.prototype.bind = function( userId ) {
 	function saveSetting( e ) { self.saveSetting( e, userId ); }
 }
 
-ns.Settings.prototype.updateWorkgroups = function( available, assigned ) {
+ns.Settings.prototype.updateWorkgroups = function( assigned ) {
 	const self = this;
+	sLog( 'updateWorkgroups', assigned );
 	self.set( 'workgroups', {
-		available : available,
+		available : null,
 		assigned  : assigned,
 	});
 }
@@ -3063,6 +3078,12 @@ ns.Settings.prototype.updateWorkgroups = function( available, assigned ) {
 ns.Settings.prototype.get = function( setting ) {
 	const self = this;
 	let settings = JSON.parse( self.settingStr );
+	if ( settings.workgroups && self.worgCtrl ) {
+		let available = self.worgCtrl.get();
+		settings.workgroups.available = available;
+	}
+	
+	sLog( 'get', settings );
 	if ( setting )
 		return settings[ setting ] || null;
 	else
@@ -3071,6 +3092,7 @@ ns.Settings.prototype.get = function( setting ) {
 
 ns.Settings.prototype.sendSaved = function( setting, value, success, userId ) {
 	const self = this;
+	sLog( 'sendSaved', userId );
 	const update = {
 		type : 'update',
 		data : {
@@ -3087,6 +3109,7 @@ ns.Settings.prototype.sendSaved = function( setting, value, success, userId ) {
 
 ns.Settings.prototype.sendError = function( setting, errMsg, userId ) {
 	const self = this;
+	sLog( 'sendError', userId );
 	const fail = {
 		type : 'update',
 		data : {
@@ -3131,6 +3154,7 @@ ns.Settings.prototype.close = function() {
 	if ( self.db )
 		self.db.close();
 	
+	delete self.worgCtrl;
 	delete self.conn;
 	delete self.db;
 	delete self.roomId;
@@ -3157,7 +3181,6 @@ ns.Settings.prototype.init = function( dbPool, name, callback ) {
 	function worgs( e, uid ) { self.handleWorgs( e, uid ); }
 	
 	self.list = Object.keys( self.handlerMap );
-	
 	self.db = new dFace.RoomDB( dbPool, self.roomId );
 	self.db.getSettings()
 		.then( settings )
@@ -3339,6 +3362,10 @@ ns.Settings.prototype.handleClassroom = function( value, userId ) {
 
 ns.Settings.prototype.handleWorgs = function( worg, userId ) {
 	const self = this;
+	sLog( 'handleWorgs', [
+		worg,
+		userId,
+	], 3 );
 	self.emit( 'workgroups', worg, userId );
 }
 

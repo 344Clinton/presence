@@ -37,6 +37,7 @@ ns.WorgCtrl = function( dbPool ) {
 	self.worgUsers = {}; // each workgroup has a list of members.
 	self.userWorgs = {}; // each user has a list of memberships.
 	self.streamers = {}; // each streamer has a list of streamWorgs
+	self.streamWorgs = []; // worg ids for streaming
 	
 	self.init( dbPool );
 }
@@ -64,12 +65,16 @@ ns.WorgCtrl.prototype.add = function( worg ) {
 	self.fIds.push( fId );
 	self.cIds.push( cId );
 	self.worgUsers[ cId ] = [];
+	self.emit( 'available', cId );
 	
 	return cId;
 }
 
-ns.WorgCtrl.prototype.get = function() {
+ns.WorgCtrl.prototype.get = function( clientId ) {
 	const self = this;
+	if ( clientId )
+		return self.cMap[ clientId ] || null;
+	
 	return self.cMap;
 }
 
@@ -90,12 +95,24 @@ ns.WorgCtrl.prototype.resolveList = function( worgIds ) {
 
 ns.WorgCtrl.prototype.remove = function( clientId ) {
 	const self = this;
-	log( 'remove', clientId );
+	log( 'remove - NYI', clientId );
+}
+
+ns.WorgCtrl.prototype.getByFId = function( fId ) {
+	const self = this;
+	if ( fId )
+		return self.fMap[ fId ] || null;
+	
+	return self.fMap;
+}
+
+ns.WorgCtrl.prototype.getByFIdList = function( fIdList ) {
+	const self = this;
 }
 
 ns.WorgCtrl.prototype.removeByFID = function( fId ) {
 	const self = this;
-	log( 'removeByFID', fId );
+	log( 'removeByFID - NYI', fId );
 }
 
 ns.WorgCtrl.prototype.addUser = function( accId, worgs ) {
@@ -135,18 +152,17 @@ ns.WorgCtrl.prototype.getMemberOfList = function( accId ) {
 	return self.userWorgs[ accId ] || [];
 }
 
-ns.WorgCtrl.prototype.getContactList = function( accId, worgs ) {
+ns.WorgCtrl.prototype.getContactList = function( accId ) {
 	const self = this;
-	const member = worgs.member || [];
+	const member = self.getMemberOfList( accId );
 	const allLists = member.map( getWorgUserList );
 	const flatted = {};
 	allLists.forEach( flatten );
 	const list = Object.keys( flatted );
 	return list;
 	
-	function getWorgUserList( worg ) {
-		let cId = worg.clientId;
-		let list = self.getUserList( cId );
+	function getWorgUserList( wId ) {
+		let list = self.getUserList( wId );
 		return list;
 	}
 	
