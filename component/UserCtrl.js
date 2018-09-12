@@ -20,12 +20,21 @@
 'use strict';
 
 const log = require( './Log' )( 'UserCtrl' );
+const Account = require( './Account' );
+const Guest = require( './GuestAccount' );
 
 const ns = {};
-ns.UserCtrl = function( dbPool, idCache, worgs ) {
+ns.UserCtrl = function(
+	dbPool,
+	idCache,
+	worgs,
+	roomCtrl
+) {
 	const self = this;
+	self.dbPool = dbPool;
 	self.idc = idCache;
 	self.worgs = worgs;
+	self.roomCtrl = roomCtrl;
 	self.db = null;
 	
 	self.accounts = {};
@@ -38,25 +47,43 @@ ns.UserCtrl = function( dbPool, idCache, worgs ) {
 
 // Public
 
-ns.UserCtrl.prototype.addAccount = async function( account ) {
+ns.UserCtrl.prototype.addAccount = async function( session, conf ) {
 	const self = this;
-	log( 'addAccount', account.id );
+	log( 'addAccount', conf, 3 );
+	const accId = conf.clientId;
+	const worgs = conf.workgroups;
+	delete conf.workgroups;
+	
+	self.worgs.addUser( accId, worgs );
+	const account = new Account(
+		session,
+		conf,
+		self.dbPool,
+		self.roomCtrl,
+		self.worgs,
+	);
+	
 	let aId = account.id;
 	if ( self.accounts[ aId ])
 		return;
 	
 	self.accounts[ aId ] = account;
 	self.accIds.push( aId );
-	try {
-		await self.updateAllTheThings( aId );
-	} catch( err ) {
-		log( 'addAccount - updateallthethings borked', err );
-	}
+	
+	self.setContactList( aId );
 }
 
-ns.UserCtrl.prototype.addGuest = function( guest ) {
+ns.UserCtrl.prototype.addGuest = function( session, conf ) {
 	const self = this;
-	log( 'addGuest', guest );
+	log( 'addGuest', conf );
+	const accId = conf.id;
+	const guest = new Guest(
+		session,
+		conf,
+		self.roomCtrl,
+	);
+	self.accounts[ accId ] = guest;
+	self.accIds.push( accId );
 }
 
 ns.UserCtrl.prototype.remove = function( accountId ) {
@@ -75,7 +102,9 @@ ns.UserCtrl.prototype.remove = function( accountId ) {
 
 ns.UserCtrl.prototype.close = function() {
 	const self = this;
+	delete self.dbPool;
 	delete self.worgs;
+	delete self.roomCtrl;
 }
 
 // Private
@@ -130,14 +159,9 @@ ns.UserCtrl.prototype.handleWorgUserRemoved = function( removedId, memberOf ) {
 	}
 }
 
-ns.UserCtrl.prototype.updateAllTheThings = async function( accId ) {
+ns.UserCtrl.prototype.setContactList = async function( accId ) {
 	const self = this;
 	const acc = self.accounts[ accId ];
-	const accWorgs = acc.getWorkgroups();
-	log( 'worgs', accWorgs, 3 );
-	if ( accWorgs )
-		self.worgs.addUser( accId, accWorgs );
-	
 	let list;
 	try {
 		list = await self.buildContactListFor( accId );

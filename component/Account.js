@@ -26,20 +26,22 @@ const util = require( 'util' );
 
 var ns = {};
 ns.Account = function(
-	conf,
 	session,
+	conf,
 	dbPool,
-	roomCtrl
+	roomCtrl,
+	worgCtrl,
 ) {
 	const self = this;
 	self.id = conf.clientId;
 	self.login = conf.login;
-	self.auth = conf.auth;
+	self.auth = conf.auth || {};
 	self.identity = conf.identity;
 	self.settings = conf.settings;
 	self.session = session;
 	self.dbPool = dbPool;
 	self.roomCtrl = roomCtrl;
+	self.worgCtrl = worgCtrl;
 	
 	self.rooms = null;
 	self.contacts = [];
@@ -59,14 +61,14 @@ ns.Account.prototype.close = function() {
 		
 		delete self.dbPool;
 		delete self.roomCtrl;
+		delete self.worgCtrl;
 		delete self.onclose;
 	}
 }
 
 ns.Account.prototype.getWorkgroups = function() {
 	const self = this;
-	//self.log( 'getWorkgroups', self.auth.workgroups, 3 );
-	return self.auth.workgroups;
+	return self.worgCtrl.get( self.id );
 }
 
 ns.Account.prototype.setContactList = function( contacts ) {
@@ -123,9 +125,12 @@ ns.Account.prototype.init = function() {
 	var logStr = 'Account-' + self.login;
 	self.log = require( './Log' )( logStr );
 	
-	self.wgAssEventId = self.roomCtrl.on( 'workgroup-assigned', wgAssigned );
-	
-	function wgAssigned( wg, roomId ) { self.handleWorkgroupAssigned( wg, roomId ); }
+	self.roomCtrl.on( self.id, roomCtrlEvent );
+	self.roomCtrlEvents = {
+		'join' : join,
+	};
+	function roomCtrlEvent( e, rid ) { self.handleRoomCtrlEvent( e, rid ); }
+	function join( e ) { self.handleRoomJoin( e ); }
 	
 	self.setIdentity();
 	
@@ -151,11 +156,34 @@ ns.Account.prototype.init = function() {
 	function handleRoomMsg( e, cid ) { self.log( 'roomMsg', msg ); }
 	function joinRoom( e, cid ) { self.joinRoom( e, cid ); }
 	function createRoom( e, cid ) { self.createRoom( e, cid ); }
-	function handleContact( e, cid ) { self.handleContact( e, cid ); }
+	function handleContact( e, cid ) { self.handleContactEvent( e, cid ); }
 	
 	function roomClosed( e ) { self.handleRoomClosed( e ); }
 	//function joinedRoom( e, rid ) { self.handleJoinedRoom( e, rid ); }
 	//function leftRoom( e, rid ) { self.handleLeftRoom( e, rid ); }
+}
+
+ns.Account.prototype.handleRoomCtrlEvent = function( event, roomId ) {
+	const self = this;
+	self.log( 'handleRoomCtrlEvent', [
+		event,
+		roomId,
+	]);
+	const handler = self.roomCtrlEvents[ event.type ];
+	if ( !handler ) {
+		self.log( 'handleRoomCtrlEvent - no handler for', event );
+		return;
+	}
+	
+	handler( event.data, roomId );
+}
+
+ns.Account.prototype.handleRoomJoin = function( event, roomId ) {
+	const self = this;
+	self.log( 'handleRoomJoin', [
+		event,
+		roomId,
+	]);
 }
 
 ns.Account.prototype.handleWorkgroupAssigned = function( addedWorg, roomId ) {
@@ -165,15 +193,16 @@ ns.Account.prototype.handleWorkgroupAssigned = function( addedWorg, roomId ) {
 		return;
 	}
 	
-	let isMember = self.auth.workgroups.member.some( checkIsMember );
+	let isMember = self.worgCtrl.getMemberOf( self.id ).some( checkIsMember );
 	if ( !isMember )
 		return;
 	
 	const account = self.buildRoomAccount();
 	self.roomCtrl.connectWorkgroup( account, roomId, roomBack );
 	
-	function checkIsMember( worg ) {
-		return worg.clientId === addedWorg.cId;
+	function checkIsMember( worgId ) {
+		self.log( 'checkIsMember', worgId );
+		return worgId === addedWorg.cId;
 	}
 	
 	function roomBack( err, room ) {
@@ -273,11 +302,14 @@ ns.Account.prototype.handleSettings = function( msg, cid ) {
 ns.Account.prototype.loadRooms = function() {
 	const self = this;
 	const roomDb = new dFace.RoomDB( self.dbPool );
-	roomDb.getForAccount( self.id, self.auth.workgroups.member )
+	const memberWorgs = self.worgCtrl.getMemberOfAsFID( self.id );
+	self.log( 'memberWorgs', memberWorgs );
+	roomDb.getForAccount( self.id, memberWorgs )
 		.then( roomsBack )
 		.catch( loadError );
 	
 	function roomsBack( list ) {
+		self.log( 'roomsBack', list );
 		list.forEach( connect );
 		function connect( room ) {
 			const account = self.buildRoomAccount();
@@ -385,8 +417,7 @@ ns.Account.prototype.buildRoomAccount = function() {
 		clientId   : self.id,
 		name       : self.identity.name,
 		avatar     : self.identity.avatar,
-		admin      : self.auth.admin,
-		workgroups : self.auth.workgroups,
+		admin      : self.auth.isAdmin,
 	};
 }
 
@@ -399,9 +430,32 @@ ns.Account.prototype.handleRoomClosed = function( roomId ) {
 	self.session.send( close );
 }
 
-ns.Account.prototype.handleContact = function( event, clientId ) {
+ns.Account.prototype.handleContactEvent = function( event, clientId ) {
 	const self = this;
 	self.log( 'handleContact', event );
+	if ( 'open-chat' === event.type )
+		self.openContactChat( event.data, clientId );
+}
+
+ns.Account.prototype.openContactChat = function( event, clientId ) {
+	const self = this;
+	self.log( 'openContactChat', event );
+	const contactId = event.clientId;
+	const room = self.rooms.isParticipant( contactId );
+	if ( room )
+		return;
+	
+	self.roomCtrl.openContact( self.id, contactId )
+		.then( conBack )
+		.catch( conFail );
+		
+	function conBack( contact ) {
+		self.log( 'conBack', contact );
+	}
+	
+	function conFail( err ) {
+		self.log( 'conFail', err.stack || err );
+	}
 }
 
 ns.Account.prototype.logout = function( callback ) {

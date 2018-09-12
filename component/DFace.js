@@ -442,7 +442,7 @@ ns.RoomDB.prototype.getForAccount = function( accountId, workgroups ) {
 	const self = this;
 	let wgIds = null;
 	if ( workgroups )
-		wgIds = workgroups.map( getId ).join( '|' );
+		wgIds = workgroups.join( '|' );
 	
 	return new Promise( getRooms );
 	function getRooms( resolve, reject ) {
@@ -605,6 +605,60 @@ ns.RoomDB.prototype.dismissWorkgroup = function( fWgId, roomId ) {
 			resolve( rows[ 0 ]);
 		}
 	}
+}
+
+ns.RoomDB.prototype.setRelation = async function( accIdA, accIdB ) {
+	const self = this;
+	const relationId = uuid.get( 'rel' );
+	const values = [
+		relationId,
+		accIdA,
+		accIdB,
+		null,
+	];
+	let res = null;
+	try {
+		res = await self.query( 'user_relation_create', values );
+	} catch( e ) {
+		roomLog( 'setting relation failed', {
+			e : e.stack || e,
+			v : values,
+		});
+		throw new Error( 'ERR_DB_FAILED' );
+	}
+	
+	if ( !res.rows )
+		throw new Error( 'ERR_DB_SET_RELATION' );
+	
+	return res.rows[0] || null;
+}
+
+ns.RoomDB.prototype.getRelation = async function( accIdA, accIdB ) {
+	const self = this;
+	roomLog( 'getRelation', {
+		a : accIdA,
+		b : accIdB,
+	});
+	const values = [
+		accIdA,
+		accIdB,
+	];
+	let res = null;
+	try {
+		res = await self.query( 'user_relation_read', values );
+	} catch ( e ) {
+		roomLog( 'getRelation - query failed', e );
+		throw new Error( 'ERR_DB_FAILED' );
+	}
+	
+	if ( !res.rows )
+		throw new Error( 'ERR_DB_GET_RELATION' );
+	
+	return res.rows[0] || null;
+}
+
+ns.RoomDB.prototype.getRelationsFor = function( accId ) {
+	const self = this;
 }
 
 ns.RoomDB.prototype.authorize = function( roomId, accountIds ) {

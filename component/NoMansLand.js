@@ -23,8 +23,6 @@ const log = require( './Log')( 'NoMansLand' );
 const TCPPool = require( './TCPPool' );
 const WSPool = require( './WSPool' );
 const Session = require( './Session' );
-const Account = require( './Account' );
-const Guest = require( './GuestAccount' );
 const dFace = require( './DFace' );
 const uuid = require( './UuidPrefix')();
 
@@ -41,7 +39,7 @@ ns.NoMansLand = function( dbPool, userCtrl, roomCtrl, fcReq ) {
 	self.wsPool = null;
 	self.connections = {};
 	self.sessions = {};
-	self.accounts = {};
+	self.sessionAccountMap = {};
 	self.authTimeoutMS = 1000 * 20; // 20 sec
 	
 	self.init();
@@ -162,16 +160,16 @@ ns.NoMansLand.prototype.checkInvite = function( bundle, cid ) {
 	}
 }
 
-ns.NoMansLand.prototype.loginGuest = function( identity, roomId, cid ) {
+ns.NoMansLand.prototype.loginGuest = function( identity, roomId, cId ) {
 	const self = this;
-	const client = self.getClient( cid );
+	const client = self.getClient( cId );
 	if ( !client )
 		return;
 	
 	// session
 	const accId = uuid.get( 'guest' );
 	const session = self.createSession( accId );
-	self.addToSession( session.id, cid );
+	self.addToSession( session.id, cId );
 	
 	// guest account
 	const accConf = {
@@ -179,6 +177,11 @@ ns.NoMansLand.prototype.loginGuest = function( identity, roomId, cid ) {
 		roomId   : roomId,
 		identity : identity,
 	};
+	self.userCtrl.addGuest( session, accConf );
+	self.sendReady( cId );
+	return;
+	
+	/*
 	const account = new Guest(
 		accConf,
 		session,
@@ -186,7 +189,7 @@ ns.NoMansLand.prototype.loginGuest = function( identity, roomId, cid ) {
 	);
 	self.setAccount( account );
 	self.userCtrl.addGuest( account );
-	self.sendReady( cid );
+	*/
 }
 
 ns.NoMansLand.prototype.setClientAuthenticated = function( success, cid, callback ) {
@@ -202,7 +205,7 @@ ns.NoMansLand.prototype.setClientAuthenticated = function( success, cid, callbac
 	client.sendCon( auth, callback );
 }
 
-ns.NoMansLand.prototype.setClientAccountStage = function( auth, cid ) {
+ns.NoMansLand.prototype.setClientAccountStage = function( friendData, cid ) {
 	const self = this;
 	const client = self.getClient( cid );
 	if ( !client ) {
@@ -210,7 +213,8 @@ ns.NoMansLand.prototype.setClientAccountStage = function( auth, cid ) {
 		return;
 	}
 	
-	client.auth = auth;
+	log( 'friendData', friendData );
+	client.friendData = friendData;
 	client.on( 'msg', handleEvent );
 	
 	// send account challenge
@@ -253,7 +257,7 @@ ns.NoMansLand.prototype.unsetClientAccountStage = function( cid ) {
 	if ( !client )
 		return;
 	
-	client.auth = null;
+	client.friendData = null;
 	client.release( 'msg' );
 }
 
@@ -332,17 +336,19 @@ ns.NoMansLand.prototype.clientLogin = function( identity, cid ) {
 		loginFailed( 'ERR_NO_LOGIN', identity );
 		return
 	}
+	
 	const login = identity.alias;
 	const client = self.getClient( cid );
-	if ( !client.auth || client.auth.login !== login ) {
+	const fData = client.friendData;
+	if ( !fData || !fData.auth || fData.auth.login !== login ) {
 		loginFailed( 'ERR_LOGIN_IDENTITY_MISMATCH', {
-			clogin : client.auth.login,
+			clogin : fData,
 			ilogin : login,
 		});
 		return;
 	}
 	
-	self.accDb.get( client.auth.login )
+	self.accDb.get( fData.auth.login )
 		.then( accBack )
 		.catch( accSad );
 	
@@ -368,31 +374,28 @@ ns.NoMansLand.prototype.clientLogin = function( identity, cid ) {
 	
 	function doLogin( acc ) {
 		let client = self.getClient( cid );
-		acc.auth = client.auth;
+		let accId = acc.clientId;
+		let fData = client.friendData;
+		log( 'doLogin -fData', fData );
+		acc.auth = fData.auth;
+		acc.workgroups = fData.workgroups;
 		acc.identity = identity;
 		self.unsetClientAccountStage( cid );
-		const account = self.getAccount( acc.clientId );
-		if ( account && !account.session ) {
-			// somethings funky,
-			// in the process of logging in/out?
-			loginFailed( 'ERR_ACCOUNT_NO_SESSION', acc );
-			return;
-		}
-		
-		if ( account )// already logged in
-			self.addToSession( account.session.id, cid );
+		const session = self.getSessionForAccount( accId );
+		if ( session )// already logged in
+			self.addToSession( accId, cid );
 		else
-			self.setupAccount( acc, cid );
+			self.setupSession( acc, cid );
 		
 		self.sendReady( cid );
 	}
 	
-	function loginFailed( errCode, data ) {
-		log( 'loginFailed', errCode.stack || errCode );
+	function loginFailed( err, data ) {
+		log( 'loginFailed', err.stack || err );
 		const fail = {
 			type : 'error',
 			data : {
-				error : errCode,
+				error : err,
 				data : data,
 			},
 		};
@@ -404,14 +407,18 @@ ns.NoMansLand.prototype.clientLogin = function( identity, cid ) {
 	}
 }
 
-ns.NoMansLand.prototype.setupAccount = function( conf, clientId ) {
+ns.NoMansLand.prototype.setupSession = function( conf, clientId ) {
 	const self = this;
 	
+	log( 'setupSession', conf, 3 );
 	// session
 	const aid = conf.clientId;
 	const session = self.createSession( aid );
 	self.addToSession( session.id, clientId );
+	self.userCtrl.addAccount( session, conf );
+	return;
 	
+	/*
 	// account
 	const account = new Account(
 		conf,
@@ -421,18 +428,7 @@ ns.NoMansLand.prototype.setupAccount = function( conf, clientId ) {
 	);
 	self.setAccount( account );
 	self.userCtrl.addAccount( account );
-}
-
-ns.NoMansLand.prototype.logAccounts = function() {
-	const self = this;
-	const accIds = Object.keys( self.accounts );
-	const logins = accIds.map( getLogin );
-	log( 'logged in accounts: ', logins );
-	
-	function getLogin( id ) {
-		const acc = self.getAccount( id );
-		return acc.login || acc.id;
-	}
+	*/
 }
 
 ns.NoMansLand.prototype.validate = function( bundle, callback ) {
@@ -450,6 +446,7 @@ ns.NoMansLand.prototype.validateAuthId = function( data, callback ) {
 	const authId = data.tokens.authId;
 	authRequest( authId, userBack );
 	function userBack( err, user ) {
+		log( 'userBack', user );
 		if ( err ) {
 			callback( err, null );
 			return;
@@ -467,8 +464,11 @@ ns.NoMansLand.prototype.validateAuthId = function( data, callback ) {
 		
 		getWorkGroups( authId, wgsBack )
 		function wgsBack( err, userWgs ) {
-			if ( !err )
-				
+			if ( err ) {
+				log( 'wgsBack - err', err );
+				callback( err, null );
+				return;
+			}
 			
 			getStreamWorkgroupSetting( authId, streamWgsBack );
 			function streamWgsBack( err , streamWgs ) {
@@ -483,22 +483,21 @@ ns.NoMansLand.prototype.validateAuthId = function( data, callback ) {
 		// WG : workgroup
 		const userWGNames = getWGList( user.Workgroup );
 		const worgs = {
-			available : null,
+			available : userWgs,
 			member    : getUserWGs( userWGNames, userWgs ),
 		};
-		
-		if ( isAdmin )
-			worgs.available = userWgs;
 		
 		if ( streamWgs )
 			worgs.stream = streamWgs;
 		
-		const auth = {
-			login      : user.Name,
-			admin      : isAdmin,
+		const fData = {
+			auth : {
+				login   : user.Name,
+				isAdmin : isAdmin,
+			},
 			workgroups : worgs,
 		};
-		callback( null, auth );
+		callback( null, fData );
 		
 		function normalize( fcwg ) {
 			let wg = {
@@ -680,30 +679,38 @@ ns.NoMansLand.prototype.getClient = function( cid ) {
 	return self.connections[ cid ] || null;
 }
 
-ns.NoMansLand.prototype.createSession = function( accountId ) {
+ns.NoMansLand.prototype.createSession = function( accId ) {
 	const self = this;
-	const sid = uuid.get( 'session' );
-	const session = new Session( sid, accountId, onclose );
-	self.sessions[ sid ] = session;
+	const sId = uuid.get( 'session' );
+	const session = new Session( sId, accId, onclose );
+	self.sessions[ sId ] = session;
+	self.sessionAccountMap[ accId ] = sId;
 	return session;
 	
 	function onclose() {
-		self.sessionClosed( sid );
+		self.sessionClosed( sId );
 	}
 }
 
-ns.NoMansLand.prototype.getSession = function( sid ) {
+ns.NoMansLand.prototype.getSession = function( sessionId ) {
 	const self = this;
-	const session = self.sessions[ sid ];
+	const session = self.sessions[ sessionId ];
 	if ( !session ) {
 		log( 'no session found for', {
-			sid      : sid,
-			sessions : self.sessions,
+			sessionId : sessionId,
+			sessions  : self.sessions,
 		}, 2 );
 		return null;
 	}
 	
 	return session;
+}
+
+ns.NoMansLand.prototype.getSessionForAccount = function( accountId ) {
+	const self = this;
+	log( 'getSessionForAccount', accountId );
+	let sessionId = self.sessionAccountMap[ accountId ];
+	return self.getSession( sessionId );
 }
 
 ns.NoMansLand.prototype.addToSession = function( sessionId, clientId ) {
@@ -748,56 +755,24 @@ ns.NoMansLand.prototype.restoreSession = function( sessionId, clientId ) {
 ns.NoMansLand.prototype.removeFromSession = function( sessionId, clientId, callback ) {
 	const self = this;
 	const session = self.getSession( sessionId );
-	if ( !session )
+	if ( !session ) {
+		log( 'removeFromSession - no session for', sessionId );
 		return;
+	}
 	
 	session.detach( clientId, callback );
 }
 
-ns.NoMansLand.prototype.sessionClosed = function( sid ) {
+ns.NoMansLand.prototype.sessionClosed = function( sessionId ) {
 	const self = this;
-	const session = self.getSession( sid );
+	const session = self.sessions[ sessionId ];
 	if ( !session )
 		return;
 	
-	delete self.sessions[ sid ];
-	const account = self.getAccount( session.accountId );
-	if ( !account )
-		return;
-	
-	self.removeAccount( account.id );
-	account.close();
-}
-
-ns.NoMansLand.prototype.setAccount = function( account ) {
-	const self = this;
-	const aid = account.id;
-	if ( self.accounts[ aid ]) {
-		log( 'setAccount - account already set wtf', account );
-		return;
-	}
-	
-	self.accounts[ aid ] = account;
-	self.logAccounts();
-}
-
-ns.NoMansLand.prototype.getAccount = function( accountId ) {
-	const self = this;
-	const acc = self.accounts[ accountId ];
-	if ( !acc ) {
-		return null; 
-	}
-	
-	return acc;
-}
-
-ns.NoMansLand.prototype.removeAccount = function( aid ) {
-	const self = this;
-	self.userCtrl.remove( aid );
-	const account = self.accounts[ aid ];
-	delete self.accounts[ aid ];
-	
-	self.logAccounts();
+	const accId = session.accountId;
+	delete self.sessions[ sessionId ];
+	delete self.sessionAccountMap[ accId ];
+	self.userCtrl.remove( accId );
 }
 
 module.exports = ns.NoMansLand;

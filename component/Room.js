@@ -2715,7 +2715,7 @@ util.inherits( ns.Workgroup, Emitter );
 
 ns.Workgroup.prototype.getUserWorkgroupList = function( userId ) {
 	const self = this;
-	const uwgs = self.worgCtrl.getMemberOfList( userId );
+	const uwgs = self.worgCtrl.getMemberOf( userId );
 	return uwgs;
 }
 
@@ -2738,6 +2738,10 @@ ns.Workgroup.prototype.getAssigned = function() {
 	function addInfo( fId ) {
 		let ass = self.assigned[ fId ];
 		let wg = self.worgCtrl.getByFId( fId );
+		wLog( 'addInfo', [
+			ass,
+			wg,
+		], 3 );
 		ass.clientId = wg.clientId;
 		ass.name = wg.name;
 		return ass;
@@ -2752,7 +2756,7 @@ ns.Workgroup.prototype.getAssignedClientIds = function() {
 
 ns.Workgroup.prototype.getAssignedForUser = function( userId ) {
 	const self = this;
-	const uwgs = self.worgCtrl.getMemberOfList( userId );
+	const uwgs = self.worgCtrl.getMemberOf( userId );
 	if ( !uwgs || !uwgs.length )
 		return [];
 	

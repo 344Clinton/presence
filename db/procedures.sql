@@ -40,6 +40,11 @@ DROP PROCEDURE IF EXISTS room_get_assigned_workgroups;
 DROP PROCEDURE IF EXISTS room_assign_workgroup;
 DROP PROCEDURE IF EXISTS room_dismiss_workgroup;
 
+# USER RELATION
+DROP PROCEDURE IF EXISTS user_relation_create;
+DROP PROCEDURE IF EXISTS user_relation_read;
+DROP PROCEDURE IF EXISTS user_relation_read_all_for_user;
+
 # AUTH
 DROP PROCEDURE IF EXISTS auth_get_for_room;
 DROP PROCEDURE IF EXISTS auth_get_for_account;
@@ -580,6 +585,69 @@ CREATE PROCEDURE auth_remove(
 BEGIN
 DELETE afr FROM authorized_for_room AS afr
 WHERE afr.roomId = `roomId` AND afr.accountId = `accountId`;
+END//
+
+#
+# USER RELATION
+#
+
+#
+# USER_RELATION_CREATE
+CREATE PROCEDURE user_relation_create(
+	IN `clientId` VARCHAR( 191 ),
+	IN `accountA` VARCHAR( 191 ),
+	IN `accountB` VARCHAR( 191 ),
+	IN `roomId`   VARCHAR( 191 )
+)
+BEGIN
+INSERT INTO `user_relation` (
+	`clientId`,
+	`accountA`,
+	`accountB`,
+	`roomId`
+) VALUES (
+	`clientId`,
+	`accountA`,
+	`accountB`,
+	`roomId`
+);
+SELECT * FROM user_relation AS r
+WHERE r.accountA = `accountA` AND r.accountB = `accountB`;
+END//
+
+#
+# USER_RELATION_GET
+CREATE PROCEDURE user_relation_read(
+	IN `accountA` VARCHAR( 191 ),
+	IN `accountB` VARCHAR( 191 )
+)
+BEGIN
+SELECT
+	r.clientId,
+	r.accountA,
+	r.accountB,
+	r.roomId,
+	r.created
+FROM user_relation AS r
+WHERE ( r.accountA = `accountA` AND r.accountB = `accountB` )
+OR ( r.accountA = `accountB` AND r.accountB = `accountA` );
+END//
+
+#
+# USER_RELATION_GET_FOR_USER
+CREATE PROCEDURE user_relation_read_all_for_user(
+	IN `accountId` VARCHAR( 191 )
+)
+BEGIN
+SELECT
+	r.clientId,
+	r.accountA,
+	r.accountB,
+	r.roomId,
+	r.created
+FROM user_relation AS r
+WHERE r.accountA = `accountId`
+OR r.accountB = `accountId`;
 END//
 
 #

@@ -147,14 +147,20 @@ ns.WorgCtrl.prototype.getUserList = function( worgId ) {
 	return self.worgUsers[ worgId ] || [];
 }
 
-ns.WorgCtrl.prototype.getMemberOfList = function( accId ) {
+ns.WorgCtrl.prototype.getMemberOf = function( accId ) {
 	const self = this;
 	return self.userWorgs[ accId ] || [];
 }
 
+ns.WorgCtrl.prototype.getMemberOfAsFID = function( accId ) {
+	const self = this;
+	const cId_list = self.getMemberOf( accId );
+	return self.cId_to_fId( cId_list );
+}
+
 ns.WorgCtrl.prototype.getContactList = function( accId ) {
 	const self = this;
-	const member = self.getMemberOfList( accId );
+	const member = self.getMemberOf( accId );
 	const allLists = member.map( getWorgUserList );
 	const flatted = {};
 	allLists.forEach( flatten );
@@ -393,6 +399,15 @@ ns.WorgCtrl.prototype.checkIsMemberOf = function( worgId, accId ) {
 		return false;
 	
 	return worg.some( mId => mId === accId );
+}
+
+ns.WorgCtrl.prototype.cId_to_fId = function( cId_list ) {
+	const self = this;
+	return cId_list.map( cId => {
+		let wg = self.cMap[ cId ];
+		let fId = wg.fId;
+		return fId;
+	});
 }
 
 module.exports = ns.WorgCtrl;

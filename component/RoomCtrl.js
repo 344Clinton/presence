@@ -43,12 +43,39 @@ ns.RoomCtrl = function( dbPool, idCache, worgs ) {
 	self.roomIds = [];
 	self.roomLoads = {};
 	
+	/*
+	self.relations = {};
+	self.relationIds = [];
+	self.relationLoads = {};
+	*/
+	
+	self.contactRooms = {};
+	self.contactRoomIds = [];
+	self.contactRoomLoads = {};
+	
 	self.init();
 }
 
 util.inherits( ns.RoomCtrl, Emitter );
 
 // Public
+
+ns.RoomCtrl.prototype.openContact = async function( accId, contactId ) {
+	const self = this;
+	log( 'openContact', [
+		accId,
+		contactId,
+	]);
+	
+	let room = null;
+	try {
+		room = await self.getContactRoom( accId, contactId );
+	} catch( e ) {
+		return null;
+	}
+	//self.roomDb.getRelation( accId, contactId );
+	
+}
 
 ns.RoomCtrl.prototype.createRoom = function( account, conf, callback ) {
 	const self = this;
@@ -493,6 +520,124 @@ ns.RoomCtrl.prototype.removeRoom = function( rid ) {
 		delete self.rooms[ rid ];
 		self.roomIds = Object.keys( self.rooms );
 	}
+}
+
+ns.RoomCtrl.prototype.getContactRoom = async function( accId, contactId ) {
+	const self = this;
+	let contact = null;
+	try {
+		contact = await self.idCache.get( contactId );
+	} catch ( e ) {
+		log( 'getContactRoom - error fetching contact identity', e );
+		throw new Error( e );
+	}
+	
+	log( 'getContactRoom - contact', contact );
+	if ( !contact ) {
+		log( 'getContactRoom - no identity found for', contactId );
+		throw new Error( 'ERR_NO_CONTACT_IDENTITY' );
+	}
+	
+	let relation = null;
+	try {
+		relation = await self.roomDb.getRelation( accId, contactId );
+	} catch( e ) {
+		log( 'getContactRoom - error loading db relation', e.stack || e );
+		throw new Error( 'ERR_DB_GET_RELATION' );
+	}
+	
+	log( 'getContactRoom - relation', relation );
+	if ( !relation ) {
+		try {
+			relation = await self.setRelation( accId, contactId );
+		} catch( e ) {
+			log( 'getContactRoom - set relation failed', e.stack || e );
+		}
+	}
+	
+	if ( !relation ) {
+		throw new Error( 'ERR_CANNOT_CREATE_RELATION' );
+	}
+	
+	log( 'getContactRoom - relation', relation );
+	let room = null;
+	if ( relation.roomId )
+		room = await loadRoom( relation.roomId );
+	else
+		createRoom( relation.clientId );
+	
+	return room;
+	
+	async function loadRoom( roomId ) {
+		log( 'getContactRoom.loadRoom', roomId );
+		let room = null;
+		try {
+			room = await self.initContactRoom( roomId );
+		} catch( e ) {
+			log( 'getContactRoom.loadRoom - could not init room', e.stack || e );
+			return null;
+		}
+		
+		return room;
+	}
+	
+	function createRoom( relationId ) {
+		log( 'getContactRoom.createRoom' );
+		let room = null;
+	}
+}
+
+ns.RoomCtrl.prototype.initContactRoom = async function( roomId ) {
+	const self = this;
+	let roomConf = null;
+	try {
+		roomConf = await self.roomDb.get( roomId );
+	} catch ( e ) {
+		log( 'initContactRoom  - failed to load roomConf', e.stack || e );
+	}
+	
+	log( 'initContactRoom - roomConf', roomConf );
+}
+
+ns.RoomCtrl.prototype.createContactRoom = async function( relationId ) {
+	const self = this;
+	let roomConf = null;
+	try {
+		roomConf = await self.roomDb.set(
+			null,
+			
+		)
+	}
+}
+
+ns.RoomCtrl.prototype.setRelation = async function( accIdA, accIdB ) {
+	const self = this;
+	log( 'setRelation', [
+		accIdA,
+		accIdB,
+	]);
+	let relation = null;
+	try {
+		relation = await self.roomDb.setRelation( accIdA, accIdB );
+	} catch( e ) {
+		log( 'setRelation - db err setting realtion', {
+			accA : accIdA,
+			accB : accIdB,
+			err  : e.stack || e,
+		});
+		throw new Error( e );
+	}
+	
+	if ( !relation ) {
+		log( 'setRelation - failed to set realtion for', {
+			a : accIdA,
+			b : accIdB,
+		});
+		throw new Error( 'ERR_DB_SET_RELATION' );
+	}
+	
+	log( 'setRelation - relation', relation );
+	return relation;
 }
 
 // account

@@ -46,8 +46,8 @@ function dbReady( ok ) {
 	
 	presence.idc = new IdCache( presence.db );
 	presence.worgs = new WorgCtrl( presence.db );
-	presence.users = new UserCtrl( presence.db, presence.idc, presence.worgs );
 	presence.rooms = new RoomCtrl( presence.db, presence.idc, presence.worgs );
+	presence.users = new UserCtrl( presence.db, presence.idc, presence.worgs, presence.rooms );
 	openComms();
 }
 
