@@ -44,7 +44,7 @@ ns.Room = function( conf, db, idCache, worgCtrl ) {
 	self.id = conf.clientId;
 	self.ownerId = conf.ownerId;
 	self.name = conf.name || null;
-	self.isPrivate = conf.isPrivate;
+	self.isPrivate = !!conf.isPrivate;
 	self.persistent = conf.persistent || false;
 	self.guestAvatar = conf.guestAvatar;
 	self.dbPool = db;
@@ -365,7 +365,6 @@ ns.Room.prototype.loadUsers = function() {
 	}
 	
 	function addUsers( users ) {
-		const tinyAvatar = require( './TinyAvatar' );
 		users.forEach( add );
 		
 		function add( dbUser, index ) {

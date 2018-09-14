@@ -87,7 +87,7 @@ ns.Account.prototype.updateContactList = function( contacts ) {
 			return;
 		
 		diff[ cId ] = cId;
-		self.contacts[ id.clientId ] = id;
+		self.contacts[ cId ] = id;
 	}
 	
 	let diffIds = Object.keys( diff );
@@ -96,7 +96,7 @@ ns.Account.prototype.updateContactList = function( contacts ) {
 	
 	const update = diffIds.map( cId => self.contacts[ cId ]);
 	const cList = {
-		type : 'contact-update',
+		type : 'contact-list',
 		data : update,
 	};
 	self.session.send( cList );
@@ -104,6 +104,7 @@ ns.Account.prototype.updateContactList = function( contacts ) {
 
 ns.Account.prototype.addContact = function( contact ) {
 	const self = this;
+	self.log( 'addContact', contact );
 	const cId = contact.clientId;
 	if ( self.contacts[ contact.clientId ])
 		return;
@@ -118,6 +119,7 @@ ns.Account.prototype.addContact = function( contact ) {
 
 ns.Account.prototype.removeContact = function( contactId ) {
 	const self = this;
+	self.log( 'removeContact', contactId );
 	if ( self.relations[ contactId ])
 		return;
 	
@@ -379,6 +381,9 @@ ns.Account.prototype.loadRelations = async function() {
 	const contactList = Object.keys( self.relations );
 	const newList = contactList.filter( notInContacts );
 	self.log( 'newList', newList );
+	if ( !newList.length )
+		return;
+	
 	const identityList = await self.idCache.getList( newList );
 	self.updateContactList( identityList );
 	
@@ -452,10 +457,12 @@ ns.Account.prototype.joinedARoomHooray = function( room, reqId  ) {
 		return;
 	}
 	
+	self.log( 'joinedRoomHoray', room );
 	var res = {
 		clientId    : room.roomId,
 		persistent  : room.persistent,
 		name        : room.roomName,
+		isPrivate   : room.isPrivate,
 		req         : reqId,
 	};
 	var joined = {

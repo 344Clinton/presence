@@ -663,9 +663,7 @@ ns.RoomCtrl.prototype.getContactRoom = async function( accId, contactId ) {
 		if ( !room )
 			return null;
 		
-		self.authorizeForRoom( accId, roomId, authBack );
-		self.authorizeForRoom( contactId, roomId, authBack );
-		
+		await room.setRelation( relation );
 		return room;
 		
 		function authBack( err, res ) {

@@ -29,6 +29,7 @@ ns.Signal = function( conf ) {
 	const self = this;
 	self.roomId = conf.roomId;
 	self.roomName = conf.roomName;
+	self.isPrivate = conf.isPrivate;
 	self.persistent = conf.persistent;
 	self.accountId = conf.accountId;
 	self.accountName = conf.accountName;

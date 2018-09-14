@@ -2508,5 +2508,4 @@ ns.Settings.prototype.handleWorgs = function( worg, userId ) {
     self.emit( 'workgroups', worg, userId );
 }
 
-
 module.exports = ns;
