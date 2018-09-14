@@ -340,7 +340,7 @@ ns.RoomDB.prototype.set = function( clientId, name, ownerId, isPrivate ) {
 	clientId = clientId || uuid.get( 'room' );
 	const settings = '{}';
 	if ( null == isPrivate )
-		isPrivate = true;
+		isPrivate = false;
 	
 	const values = [
 		clientId,
@@ -633,6 +633,28 @@ ns.RoomDB.prototype.setRelation = async function( accIdA, accIdB ) {
 	return res.rows[0] || null;
 }
 
+ns.RoomDB.prototype.assignRelationRoom = async function( relationId, roomId ) {
+	const self = this;
+	roomLog( 'assignRelationRoom', [
+		relationId,
+		roomId,
+	]);
+	const values = [
+		relationId,
+		roomId,
+	];
+	
+	let res = null;
+	try {
+		res = await self.query( 'user_relation_assign_room', values );
+	} catch( e ) {
+		roomLog( 'assignRelationRoom - db fail', e );
+		throw new Error( 'ERR_DB_ASSING_RELATION_ROOM' );
+	}
+	
+	return true;
+}
+
 ns.RoomDB.prototype.getRelation = async function( accIdA, accIdB ) {
 	const self = this;
 	roomLog( 'getRelation', {
@@ -657,8 +679,24 @@ ns.RoomDB.prototype.getRelation = async function( accIdA, accIdB ) {
 	return res.rows[0] || null;
 }
 
-ns.RoomDB.prototype.getRelationsFor = function( accId ) {
+ns.RoomDB.prototype.getRelationsFor = async function( accId ) {
 	const self = this;
+	roomLog( 'getRelationsFor', accId );
+	const values = [
+		accId,
+	];
+	let res = null;
+	try {
+		res = await self.query( 'user_relation_read_all_for', values );
+	} catch( e ) {
+		roomLog( 'getRelationsFor - db err', e.stack || e );
+		throw new Error( 'ERR_DB_FAILED' );
+	}
+	
+	if ( !res || !res.rows )
+		return null;
+	
+	return res.rows;
 }
 
 ns.RoomDB.prototype.authorize = function( roomId, accountIds ) {

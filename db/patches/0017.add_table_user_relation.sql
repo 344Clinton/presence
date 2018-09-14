@@ -6,6 +6,7 @@ CREATE TABLE `relation` (
     `roomId`   VARCHAR( 191 ) NULL,
     PRIMARY KEY( _id ),
     UNIQUE KEY( userA, userB ),
+    UNIQUE KEY( userB, userA ),
     FOREIGN KEY( userA ) REFERENCES account( clientId )
         ON DELETE CASCADE
         ON UPDATE CASCADE,

@@ -42,8 +42,9 @@ DROP PROCEDURE IF EXISTS room_dismiss_workgroup;
 
 # USER RELATION
 DROP PROCEDURE IF EXISTS user_relation_create;
+DROP PROCEDURE IF EXISTS user_relation_assign_room;
 DROP PROCEDURE IF EXISTS user_relation_read;
-DROP PROCEDURE IF EXISTS user_relation_read_all_for_user;
+DROP PROCEDURE IF EXISTS user_relation_read_all_for;
 
 # AUTH
 DROP PROCEDURE IF EXISTS auth_get_for_room;
@@ -442,7 +443,8 @@ BEGIN
 SELECT r.clientId FROM `authorized_for_room` AS auth 
 LEFT JOIN `room` AS r 
 ON auth.roomId = r.clientId 
-WHERE auth.accountId = `accountId`;
+WHERE auth.accountId = `accountId`
+AND r.isPrivate = 0;
 END//
 
 #
@@ -611,8 +613,20 @@ INSERT INTO `user_relation` (
 	`accountB`,
 	`roomId`
 );
-SELECT * FROM user_relation AS r
-WHERE r.accountA = `accountA` AND r.accountB = `accountB`;
+SELECT * FROM user_relation AS ur
+WHERE ur.accountA = `accountA` AND ur.accountB = `accountB`;
+END//
+
+#
+# USER_RELATION_ASSIGN_ROOM
+CREATE PROCEDURE user_relation_assign_room(
+	IN `relationId` VARCHAR( 191 ),
+	IN `roomId`     VARCHAR( 191 )
+)
+BEGIN
+UPDATE user_relation AS ur
+SET ur.roomId = `roomId`
+WHERE ur.clientId = `relationId`;
 END//
 
 #
@@ -635,7 +649,7 @@ END//
 
 #
 # USER_RELATION_GET_FOR_USER
-CREATE PROCEDURE user_relation_read_all_for_user(
+CREATE PROCEDURE user_relation_read_all_for(
 	IN `accountId` VARCHAR( 191 )
 )
 BEGIN

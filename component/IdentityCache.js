@@ -68,10 +68,15 @@ ns.IDC.prototype.get = async function( id ) {
 	return identity;
 }
 
-ns.IDC.prototype.getList = async function( list ) {
+ns.IDC.prototype.getList = async function( idList ) {
 	const self = this;
-	log( 'getList', list );
-	return await Promise.all( list.map( await get ));
+	log( 'getList', idList );
+	let identities = await Promise.all( idList.map( await get ));
+	if ( !identities || !identities.length )
+		return [];
+	
+	return identities;
+	
 	async function get( id ) {
 		let identity = await self.get( id );
 		return identity;

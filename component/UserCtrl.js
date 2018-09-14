@@ -59,6 +59,7 @@ ns.UserCtrl.prototype.addAccount = async function( session, conf ) {
 		session,
 		conf,
 		self.dbPool,
+		self.idc,
 		self.roomCtrl,
 		self.worgs,
 	);
@@ -162,29 +163,17 @@ ns.UserCtrl.prototype.handleWorgUserRemoved = function( removedId, memberOf ) {
 ns.UserCtrl.prototype.setContactList = async function( accId ) {
 	const self = this;
 	const acc = self.accounts[ accId ];
-	let list;
-	try {
-		list = await self.buildContactListFor( accId );
-	} catch( e ) {
-		log( 'hepp', e );
-		list = [];
-	}
-	
-	acc.setContactList( list );
+	let list = [];
+	list = await self.buildContactListFor( accId );
+	acc.updateContactList( list );
 }
 
 ns.UserCtrl.prototype.buildContactListFor = async function( accId ) {
 	const self = this;
 	log( 'buildContactListFor', accId );
 	const list = self.worgs.getContactList( accId );
-	let ids;
-	try {
-		ids = await self.idc.getList( list );
-	} catch( e ) {
-		log( 'buildContactListFor - failed to load ids', e );
-		ids = [];
-	};
-	
+	let ids = [];
+	ids = await self.idc.getList( list );
 	return ids;
 }
 

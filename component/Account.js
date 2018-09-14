@@ -29,6 +29,7 @@ ns.Account = function(
 	session,
 	conf,
 	dbPool,
+	idCache,
 	roomCtrl,
 	worgCtrl,
 ) {
@@ -40,11 +41,14 @@ ns.Account = function(
 	self.settings = conf.settings;
 	self.session = session;
 	self.dbPool = dbPool;
+	self.idCache = idCache;
 	self.roomCtrl = roomCtrl;
 	self.worgCtrl = worgCtrl;
 	
 	self.rooms = null;
-	self.contacts = [];
+	self.contacts = {};
+	self.contactIds = [];
+	self.relations = {};
 	
 	self.init();
 }
@@ -60,6 +64,7 @@ ns.Account.prototype.close = function() {
 		}
 		
 		delete self.dbPool;
+		delete self.idCache;
 		delete self.roomCtrl;
 		delete self.worgCtrl;
 		delete self.onclose;
@@ -71,45 +76,56 @@ ns.Account.prototype.getWorkgroups = function() {
 	return self.worgCtrl.get( self.id );
 }
 
-ns.Account.prototype.setContactList = function( contacts ) {
+ns.Account.prototype.updateContactList = function( contacts ) {
 	const self = this;
-	self.contacts = contacts;
+	self.log( 'updateContactList', contacts );
+	const diff = {};
+	contacts.forEach( add );
+	function add( id ) {
+		let cId = id.clientId;
+		if ( self.contacts[ cId ])
+			return;
+		
+		diff[ cId ] = cId;
+		self.contacts[ id.clientId ] = id;
+	}
+	
+	let diffIds = Object.keys( diff );
+	if ( !diffIds && !diffIds.length )
+		return;
+	
+	const update = diffIds.map( cId => self.contacts[ cId ]);
 	const cList = {
-		type : 'contact-list',
-		data : contacts,
+		type : 'contact-update',
+		data : update,
 	};
 	self.session.send( cList );
 }
 
 ns.Account.prototype.addContact = function( contact ) {
 	const self = this;
-	if ( alreadyAdded( contact.clientId ))
+	const cId = contact.clientId;
+	if ( self.contacts[ contact.clientId ])
 		return;
 	
-	self.contacts.push( contact );
+	self.contacts[ cId ] = contact;
 	const cAdd = {
 		type : 'contact-add',
 		data : contact,
 	};
 	self.session.send( cAdd );
-	
-	function alreadyAdded( clientId ) {
-		let exists = self.contacts.some( contact => {
-			if ( clientId === contact.clientId )
-				return true;
-			
-			return false;
-		});
-		
-		return exists;
-	}
 }
 
 ns.Account.prototype.removeContact = function( contactId ) {
 	const self = this;
-	self.contacts = self.contacts
-		.filter( contact => contactId !== contact.clientId );
+	if ( self.relations[ contactId ])
+		return;
 	
+	if ( !self.contacts[ contactId ])
+		return;
+	
+	delete self.contacts[ contactId ];
+	self.contactIds = Object.keys( self.contacts );
 	const cRemove = {
 		type : 'contact-remove',
 		data : contactId,
@@ -127,10 +143,12 @@ ns.Account.prototype.init = function() {
 	
 	self.roomCtrl.on( self.id, roomCtrlEvent );
 	self.roomCtrlEvents = {
-		'join' : join,
+		'workgroup-join' : worgJoin,
+		'contact-join'   : contactJoin,
 	};
 	function roomCtrlEvent( e, rid ) { self.handleRoomCtrlEvent( e, rid ); }
-	function join( e ) { self.handleRoomJoin( e ); }
+	function worgJoin( e, rid ) { self.handleWorkgroupJoin( e, rid ); }
+	function contactJoin( e, rid ) { self.handleContactJoin( e, rid ); }
 	
 	self.setIdentity();
 	
@@ -178,39 +196,49 @@ ns.Account.prototype.handleRoomCtrlEvent = function( event, roomId ) {
 	handler( event.data, roomId );
 }
 
-ns.Account.prototype.handleRoomJoin = function( event, roomId ) {
+ns.Account.prototype.handleWorkgroupJoin = function( event, roomId ) {
 	const self = this;
-	self.log( 'handleRoomJoin', [
-		event,
-		roomId,
-	]);
-}
-
-ns.Account.prototype.handleWorkgroupAssigned = function( addedWorg, roomId ) {
-	const self = this;
+	self.log( 'handleWorkgorupJoin', roomId );
 	if ( self.rooms.isParticipant( roomId )) {
-		self.log( 'handleWorkgroupAssigned - is participant', roomId );
+		self.log( 'handleWorkgroupJoin - is participant', roomId );
 		return;
 	}
-	
-	let isMember = self.worgCtrl.getMemberOf( self.id ).some( checkIsMember );
-	if ( !isMember )
-		return;
 	
 	const account = self.buildRoomAccount();
 	self.roomCtrl.connectWorkgroup( account, roomId, roomBack );
-	
-	function checkIsMember( worgId ) {
-		self.log( 'checkIsMember', worgId );
-		return worgId === addedWorg.cId;
-	}
-	
 	function roomBack( err, room ) {
+		self.log( 'joinWorkgroup roomBack', room );
 		if ( err )
 			return;
 		
 		self.joinedARoomHooray( room );
 	}
+}
+
+ns.Account.prototype.handleContactJoin = async function( event, roomId ) {
+	const self = this;
+	self.log( 'handleContactJoin', [
+		event,
+		roomId,
+	]);
+	if ( self.rooms.isParticipant( roomId )) {
+		self.log( 'handleContactJoin - is participant', roomId );
+		return;
+	}
+	
+	const account = self.buildRoomAccount();
+	const room = await self.roomCtrl.connectContact( account, roomId );
+	if ( !room ) {
+		self.log( 'handleContactJoin - failed to connect to room', roomId );
+		return;
+	}
+	
+	self.joinedARoomHooray( room );
+}
+
+ns.Account.prototype.handleWorkgroupAssigned = function( addedWorg, roomId ) {
+	const self = this;
+	
 }
 
 ns.Account.prototype.initializeClient = function( event, clientId ) {
@@ -235,6 +263,7 @@ ns.Account.prototype.initializeClient = function( event, clientId ) {
 	
 	self.initialized = true;
 	self.loadRooms();
+	self.loadRelations();
 }
 
 ns.Account.prototype.setIdentity = function( id ) {
@@ -331,6 +360,35 @@ ns.Account.prototype.loadRooms = function() {
 	
 	function loadError( err ) {
 		self.log( 'roomLoadErr', err.stack || err );
+	}
+}
+
+ns.Account.prototype.loadRelations = async function() {
+	const self = this;
+	const roomDb = new dFace.RoomDB( self.dbPool );
+	let dbRelations = null;
+	try {
+		dbRelations = await roomDb.getRelationsFor( self.id );
+	} catch( e ) {
+		self.log( 'loadRelations - db err', e.stack || e );
+		return;
+	}
+	
+	self.log( 'loadRelations', dbRelations );
+	dbRelations.forEach( setRelation );
+	const contactList = Object.keys( self.relations );
+	const newList = contactList.filter( notInContacts );
+	self.log( 'newList', newList );
+	const identityList = await self.idCache.getList( newList );
+	self.updateContactList( identityList );
+	
+	function setRelation( rel ) {
+		let contactId = ( rel.accountA === self.id ) ? rel.accountB : rel.accountA;
+		self.relations[ contactId ] = rel;
+	}
+	
+	function notInContacts( cId ) {
+		return !self.contacts[ cId ];
 	}
 }
 
@@ -445,12 +503,13 @@ ns.Account.prototype.openContactChat = function( event, clientId ) {
 	if ( room )
 		return;
 	
-	self.roomCtrl.openContact( self.id, contactId )
+	const acc = self.buildRoomAccount();
+	self.roomCtrl.openContact( acc, contactId )
 		.then( conBack )
 		.catch( conFail );
-		
+	
 	function conBack( contact ) {
-		self.log( 'conBack', contact );
+		self.joinedARoomHooray( contact );
 	}
 	
 	function conFail( err ) {
