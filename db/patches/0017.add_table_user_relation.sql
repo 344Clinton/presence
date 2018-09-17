@@ -1,4 +1,4 @@
-CREATE TABLE `relation` (
+CREATE TABLE `user_relation` (
     `_id`      INT UNSIGNED NOT NULL auto_increment,
     `clientId` VARCHAR( 191 ) NOT NULL UNIQUE,
     `userA`    VARCHAR( 191 ) NOT NULL,
