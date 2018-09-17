@@ -404,7 +404,7 @@ ns.Live.prototype.add = function( userId ) { //adds user to existing room
             self.setupStreamProxy();
         }
         
-        if ( !self.sourceId ) {
+        if ( !self.sourceId && self.worgs ) {
             let isStreamer = self.worgs.isStreamer( userId );
             if ( isStreamer ) {
                 self.sourceId = userId;

@@ -433,7 +433,6 @@ ns.RoomCtrl.prototype.setRoom = function( roomConf ) {
 			roomConf,
 			self.dbPool,
 			self.idCache,
-			self.worgs
 		);
 		
 		room.once( 'open', onOpen );
@@ -485,7 +484,6 @@ ns.RoomCtrl.prototype.bindRoom = function( room ) {
 
 ns.RoomCtrl.prototype.bindContactRoom = function( room ) {
 	const self = this;
-	log( 'bindContactRoom', room );
 	let rId = room.id;
 	room.on( 'empty', onEmpty );
 	function onEmpty( e ) { self.removeRoom( roomId ); }

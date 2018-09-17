@@ -899,6 +899,7 @@ ns.Room.prototype.send = function( event, targetId ) {
 
 /* Room Settings */
 
+const sLog = require( './Log' )( 'Room > Settings' );
 ns.ConferenceSettings = function() {
 	
 }

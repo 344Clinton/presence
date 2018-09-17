@@ -22,6 +22,9 @@
 const log = require( './Log' )( 'ContactRoom' );
 const Room = require( './Room' );
 const components = require( './RoomComponents' );
+const Signal = require( './Signal' );
+const dFace = require( './DFace' );
+const Janus = require( './Janus' );
 const util = require( 'util' );
 
 var ns = {};
@@ -42,27 +45,33 @@ ns.ContactRoom.prototype.setRelation = async function( relation ) {
 
 ns.ContactRoom.prototype.getOtherAccount = function( accId ) {
     const self = this;
+    log ( 'getOtherAccount', {
+        a : self.accIdA,
+        b : self.accIdB,
+    });
+    
+    let otherId;
     if ( accId === self.accIdA )
-        return self.accIdB;
+        otherId = self.accIdB;
     else
-        return self.accIdA;
+        otherId = self.accIdA;
+    
+    return self.users[ otherId ];
 }
 
-ns.ContactRoom.prototype.init = async function() {
+ns.ContactRoom.prototype.init = function() {
     const self = this;
     self.roomDb = new dFace.RoomDB( self.dbPool, self.id );
-    
     self.settings = new ns.ContactSettings(
         self.dbPool,
         self.id,
         self.users,
         self.onlineList,
-        self.persistent,
-        self.name,
         settingsDone
     );
     
-    function settingsDone( err , res ) {
+    async function settingsDone( err , res ) {
+        log( 'Log' );
         self.log = new components.Log(
             self.dbPool,
             self.id,
@@ -71,6 +80,7 @@ ns.ContactRoom.prototype.init = async function() {
             self.persistent,
         );
         
+        log( 'Chat' );
         self.chat = new components.Chat(
             self.id,
             self.users,
@@ -78,20 +88,27 @@ ns.ContactRoom.prototype.init = async function() {
             self.log
         );
         
+        log( 'Live' );
         self.live = new components.Live(
             self.users,
             self.onlineList,
             self.log,
+            null,
             self.settings
         );
         
-        await self.loadUsers();
+        try {
+            await self.loadUsers();
+        } catch( e ) {
+            log( 'load fail', e );
+        }
         self.setOpen();
     }
 }
 
-ns.Room.prototype.loadUsers = async function() {
+ns.ContactRoom.prototype.loadUsers = async function() {
     const self = this;
+    log( 'loadUsers' );
     let auths = null;
     try {
         auths = await self.roomDb.loadAuthorizations( self.id );
@@ -105,7 +122,11 @@ ns.Room.prototype.loadUsers = async function() {
         return false;
     }
     
-    await Promise.all( auths.forEach( await add ));
+    try {
+        await Promise.all( auths.forEach( await add ));
+    } catch ( e ) {
+        log( 'opps', e.stack || e );
+    }
     log( 'loadUsers accs set', {
         a : self.accIdA,
         b : self.accIdB,
@@ -114,8 +135,10 @@ ns.Room.prototype.loadUsers = async function() {
     return true;
     
     async function add( dbUser ) {
+        log( 'add', dbUser );
         let uid = dbUser.clientId;
         let user = await self.idCache.get( uid );
+        
         self.users[ uid ] = {
             accountId   : uid,
             accountName : user.name,
@@ -127,11 +150,14 @@ ns.Room.prototype.loadUsers = async function() {
             self.accIdB = uid;
         else
             self.accIdA = uid;
+        
+        return true;
     }
 }
 
-ns.Room.prototype.bindUser = function( account ) {
+ns.ContactRoom.prototype.bindUser = function( account ) {
     const self = this;
+    log( 'bindUser', account );
     const userId = account.clientId;
     const conf = self.users[ userId ];
     if ( !conf ) {
@@ -160,6 +186,7 @@ ns.Room.prototype.bindUser = function( account ) {
     delete self.users[ userId ];
     
     const otherAcc = self.getOtherAccount( userId );
+    log( 'otherAcc', otherAcc );
     const otherId = otherAcc.accountId;
     const otherName = otherAcc.accountName;
     // add signal user obj
@@ -205,11 +232,83 @@ ns.Room.prototype.bindUser = function( account ) {
     return user;
 }
 
+ns.ContactRoom.prototype.setOnline = function( userId ) {
+    const self = this;
+    const user = self.users[ userId ];
+    if ( !user )
+        return null;
+    
+    self.onlineList.push( userId );
+    const online = {
+        type : 'online',
+        data : {
+            clientId   : userId,
+            admin      : user.admin || false,
+            authed     : user.authed || false,
+            workgroups : null,
+        }
+    };
+    self.broadcast( online );
+    return user;
+}
+
+ns.ContactRoom.prototype.initialize =  function( requestId, userId ) {
+    const self = this;
+    const otherAcc = self.getOtherAccount( userId );
+    const state = {
+        id          : otherAcc.accountId,
+        name        : otherAcc.accountName,
+        ownerId     : self.ownerId,
+        persistent  : self.persistent,
+        isPrivate   : true,
+        settings    : self.settings.get(),
+        guestAvatar : self.guestAvatar,
+        users       : buildBaseUsers(),
+        online      : self.onlineList,
+        identities  : self.identities,
+        peers       : self.live.peerIds,
+        workgroups  : null,
+        lastMessage : self.log.getLast( 1 )[ 0 ],
+    };
+    
+    const init = {
+        type : 'initialize',
+        data : state,
+    };
+    
+    self.send( init, userId );
+    
+    function buildBaseUsers() {
+        const users = {};
+        const uIds = Object.keys( self.users );
+        uIds.forEach( build );
+        return users;
+        
+        function build( uid ) {
+            const user = self.users[ uid ];
+            if ( !user )
+                return undefined;
+            
+            let aId = user.accountId;
+            users[ aId ] = {
+                clientId   : aId,
+                name       : user.accountName,
+                avatar     : user.avatar,
+                admin      : user.admin,
+                authed     : user.authed,
+                guest      : user.guest,
+                workgroups : null,
+            };
+        }
+    }
+}
+
 
 /*
     ContactSettings
 */
 
+const sLog = require( './Log' )( 'Room > Settings' );
 ns.ContactSettings = function(
     dbPool,
     roomId,
@@ -230,11 +329,11 @@ ns.ContactSettings = function(
     );
 }
 
-util.inherits( ns.ContactSettings, component.Settings );
+util.inherits( ns.ContactSettings, components.Settings );
 
-ns.ContactSettings.prototype.init = function( dbPool, null, callback ) {
+ns.ContactSettings.prototype.init = function( dbPool, ignore, callback ) {
     const self = this;
-    self.conn = new ns.UserSend( 'settings', self.users, self.onlineList );
+    self.conn = new components.UserSend( 'settings', self.users, self.onlineList );
     self.handlerMap = {
     };
     
@@ -256,6 +355,7 @@ ns.ContactSettings.prototype.init = function( dbPool, null, callback ) {
     }
     
     function done( err ) {
+        sLog( 'done' );
         callback( err, self.setting );
     }
 }
