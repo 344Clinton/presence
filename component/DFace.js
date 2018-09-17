@@ -673,7 +673,7 @@ ns.RoomDB.prototype.getRelation = async function( accIdA, accIdB ) {
 		throw new Error( 'ERR_DB_FAILED' );
 	}
 	
-	roomLog( 'getRelation - res', relation );
+	roomLog( 'getRelation - res', res );
 	if ( !res.rows )
 		throw new Error( 'ERR_DB_GET_RELATION' );
 	

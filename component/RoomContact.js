@@ -43,21 +43,31 @@ ns.ContactRoom.prototype.setRelation = async function( relation ) {
     log( 'setRelation', relation );
     self.accIdA = relation.accountA;
     self.accIdB = relation.accountB;
+    const roomDb = new dFace.RoomDB( self.dbPool, self.id );
+    self.authorized = [
+        self.accIdA,
+        self.accIdB,
+    ];
+    roomDb.authorize(
+        self.id,
+        self.authorized,
+    );
 }
 
 ns.ContactRoom.prototype.getOtherAccount = function( accId ) {
     const self = this;
-    log ( 'getOtherAccount', {
-        a : self.accIdA,
-        b : self.accIdB,
-    });
-    
     let otherId;
     if ( accId === self.accIdA )
         otherId = self.accIdB;
     else
         otherId = self.accIdA;
     
+    log ( 'getOtherAccount', {
+        in  : accId,
+        a   : self.accIdA,
+        b   : self.accIdB,
+        out : otherId,
+    });
     return self.users[ otherId ];
 }
 
@@ -141,6 +151,7 @@ ns.ContactRoom.prototype.loadUsers = async function() {
         let uid = dbUser.clientId;
         let user = await self.idCache.get( uid );
         
+        self.authorized.push( uid );
         self.users[ uid ] = {
             accountId   : uid,
             accountName : user.name,
@@ -159,8 +170,8 @@ ns.ContactRoom.prototype.loadUsers = async function() {
 
 ns.ContactRoom.prototype.bindUser = function( account ) {
     const self = this;
-    log( 'bindUser', account );
     const userId = account.clientId;
+    log( 'bindUser', userId );
     const conf = self.users[ userId ];
     if ( !conf ) {
         log( 'bindUSer - no user for id', {
@@ -176,6 +187,7 @@ ns.ContactRoom.prototype.bindUser = function( account ) {
         return null;
     }
     
+    log( 'bindUser - user', conf );
     if ( conf.close ) {
         log( 'bindUser - user already bound', {
             userId : userId,

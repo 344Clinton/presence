@@ -217,14 +217,14 @@ ns.Account.prototype.handleWorkgroupJoin = function( event, roomId ) {
 	}
 }
 
-ns.Account.prototype.handleContactJoin = async function( event, roomId ) {
+ns.Account.prototype.handleContactJoin = async function( event, contactId ) {
 	const self = this;
 	self.log( 'handleContactJoin', [
 		event,
-		roomId,
+		contactId,
 	]);
-	if ( self.rooms.isParticipant( roomId )) {
-		self.log( 'handleContactJoin - is participant', roomId );
+	if ( self.rooms.isParticipant( contactId )) {
+		self.log( 'handleContactJoin - is participant', contactId );
 		return;
 	}
 	

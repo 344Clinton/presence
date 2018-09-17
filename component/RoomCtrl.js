@@ -74,7 +74,7 @@ ns.RoomCtrl.prototype.openContact = async function( account, contactId ) {
 		type : 'contact-join',
 		data : null,
 	};
-	self.emit( contactId, join, room.id );
+	self.emit( contactId, join, accId );
 	
 	await addToRoom( account );
 	const user = room.connect( account );
@@ -90,10 +90,15 @@ ns.RoomCtrl.prototype.openContact = async function( account, contactId ) {
 	}
 }
 
-ns.RoomCtrl.prototype.connectContact = async function( account, roomId ) {
+ns.RoomCtrl.prototype.connectContact = async function( account, contactId ) {
 	const self = this;
 	log( 'connectContact', account );
-	const room = await self.getRoom( roomId );
+	const accId = account.accountId;
+	const relation = await self.getRelation( accId, contactId );
+	if ( !relation )
+		return false;
+	
+	const room = await self.getRoom( relation.roomId );
 	if ( !room )
 		return null;
 	
@@ -749,6 +754,9 @@ ns.RoomCtrl.prototype.getRelation = async function( accIdA, accIdB ) {
 	}
 	
 	log( 'getRelation rel', relation );
+	if ( !relation )
+		return null;
+	
 	self.relations[ relation.clientId ] = relation;
 	return relation || null;
 }
