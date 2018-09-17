@@ -613,6 +613,7 @@ ns.RoomCtrl.prototype.getContactRoom = async function( accId, contactId ) {
 	if ( !relation )
 		relation = await self.setRelation( accId, contactId );
 	
+	
 	if ( !relation )
 		return null;
 	
@@ -747,6 +748,7 @@ ns.RoomCtrl.prototype.getRelation = async function( accIdA, accIdB ) {
 		return null;
 	}
 	
+	log( 'getRelation rel', relation );
 	self.relations[ relation.clientId ] = relation;
 	return relation || null;
 }

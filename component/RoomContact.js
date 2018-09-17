@@ -41,6 +41,8 @@ util.inherits( ns.ContactRoom, Room );
 ns.ContactRoom.prototype.setRelation = async function( relation ) {
     const self = this;
     log( 'setRelation', relation );
+    self.accIdA = relation.accountA;
+    self.accIdB = relation.accountB;
 }
 
 ns.ContactRoom.prototype.getOtherAccount = function( accId ) {
@@ -301,6 +303,39 @@ ns.ContactRoom.prototype.initialize =  function( requestId, userId ) {
             };
         }
     }
+}
+
+ns.ContactRoom.prototype.addUser = async function( acc, callback ) {
+    const self = this;
+    // add to users
+    log( 'addUser', acc );
+    const uid = acc.accountId;
+    if ( self.users[ uid ]) {
+        callback( null, uid );
+        return;
+    }
+    
+    let user = null;
+    user = await self.idCache.get( uid );
+    log( 'user', user );
+    acc.avatar = acc.avatar || user.avatar;
+    acc.authed = true;
+    self.users[ uid ] = acc;
+    const joinEvent = {
+        type : 'join',
+        data : {
+            clientId   : uid,
+            name       : acc.accountName,
+            avatar     : acc.avatar,
+            owner      : acc.accountId === self.ownerId,
+            admin      : acc.admin || undefined,
+            authed     : acc.authed || undefined,
+            guest      : acc.guest || undefined,
+            workgroups : null,
+        },
+    };
+    self.broadcast( joinEvent, uid );
+    callback( null, uid );
 }
 
 

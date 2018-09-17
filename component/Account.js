@@ -457,7 +457,6 @@ ns.Account.prototype.joinedARoomHooray = function( room, reqId  ) {
 		return;
 	}
 	
-	self.log( 'joinedRoomHoray', room );
 	var res = {
 		clientId    : room.roomId,
 		persistent  : room.persistent,
