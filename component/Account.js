@@ -229,9 +229,9 @@ ns.Account.prototype.handleContactJoin = async function( event, contactId ) {
 	}
 	
 	const account = self.buildRoomAccount();
-	const room = await self.roomCtrl.connectContact( account, roomId );
+	const room = await self.roomCtrl.connectContact( account, contactId );
 	if ( !room ) {
-		self.log( 'handleContactJoin - failed to connect to room', roomId );
+		self.log( 'handleContactJoin - failed to connect to room', contactId );
 		return;
 	}
 	

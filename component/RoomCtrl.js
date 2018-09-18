@@ -93,7 +93,7 @@ ns.RoomCtrl.prototype.openContact = async function( account, contactId ) {
 ns.RoomCtrl.prototype.connectContact = async function( account, contactId ) {
 	const self = this;
 	log( 'connectContact', account );
-	const accId = account.accountId;
+	const accId = account.clientId;
 	const relation = await self.getRelation( accId, contactId );
 	if ( !relation )
 		return false;
@@ -104,12 +104,15 @@ ns.RoomCtrl.prototype.connectContact = async function( account, contactId ) {
 	
 	await addToRoom( account );
 	const user = room.connect( account );
+	log( 'connectContact - done', !!user );
 	return user;
 	
 	function addToRoom( acc ) {
+		let roomId = room.id;
 		return new Promise(( resolve, reject ) => {
 			self.addToRoom( account, roomId, addBack );
 			function addBack() {
+				log( 'addBack', roomId );
 				resolve();
 			}
 		});

@@ -135,7 +135,7 @@ ns.ContactRoom.prototype.loadUsers = async function() {
     }
     
     try {
-        await Promise.all( auths.forEach( await add ));
+        await Promise.all( auths.map( await add ));
     } catch ( e ) {
         log( 'opps', e.stack || e );
     }
