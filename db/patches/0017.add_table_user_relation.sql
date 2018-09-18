@@ -4,6 +4,7 @@ CREATE TABLE `user_relation` (
     `accountA` VARCHAR( 191 ) NOT NULL,
     `accountB` VARCHAR( 191 ) NOT NULL,
     `roomId`   VARCHAR( 191 ) NULL,
+    `created`  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY( _id ),
     UNIQUE KEY( accountA, accountB ),
     UNIQUE KEY( accountB, accountA ),

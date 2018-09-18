@@ -45,6 +45,7 @@ CREATE TABLE `user_relation` (
 	`created`  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY( _id ),
 	UNIQUE KEY( accountA, accountB ),
+	UNIQUE KEY( accountB, accountA ),
 	FOREIGN KEY( accountA ) REFERENCES account( clientId )
 		ON DELETE CASCADE
 		ON UPDATE CASCADE,
