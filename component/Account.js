@@ -228,8 +228,7 @@ ns.Account.prototype.handleContactJoin = async function( event, contactId ) {
 		return;
 	}
 	
-	const account = self.buildRoomAccount();
-	const room = await self.roomCtrl.connectContact( account, contactId );
+	const room = await self.roomCtrl.connectContact( self.id, contactId );
 	if ( !room ) {
 		self.log( 'handleContactJoin - failed to connect to room', contactId );
 		return;
@@ -509,8 +508,7 @@ ns.Account.prototype.openContactChat = function( event, clientId ) {
 	if ( room )
 		return;
 	
-	const acc = self.buildRoomAccount();
-	self.roomCtrl.openContact( acc, contactId )
+	self.roomCtrl.openContact( self.id, contactId )
 		.then( conBack )
 		.catch( conFail );
 	

@@ -55,14 +55,13 @@ util.inherits( ns.RoomCtrl, Emitter );
 
 // Public
 
-ns.RoomCtrl.prototype.openContact = async function( account, contactId ) {
+ns.RoomCtrl.prototype.openContact = async function( accId, contactId ) {
 	const self = this;
 	log( 'openContact', [
-		account,
+		accId,
 		contactId,
 	]);
 	
-	let accId = account.clientId;
 	let room = null;
 	try {
 		room = await self.getContactRoom( accId, contactId );
@@ -75,25 +74,13 @@ ns.RoomCtrl.prototype.openContact = async function( account, contactId ) {
 		data : null,
 	};
 	self.emit( contactId, join, accId );
-	
-	await addToRoom( account );
-	const user = room.connect( account );
+	const user = room.connect( accId );
 	return user;
-	
-	function addToRoom( acc ) {
-		return new Promise(( resolve, reject ) => {
-			self.addToRoom( account, room.id, addBack );
-			function addBack() {
-				resolve();
-			}
-		});
-	}
 }
 
-ns.RoomCtrl.prototype.connectContact = async function( account, contactId ) {
+ns.RoomCtrl.prototype.connectContact = async function( accId, contactId ) {
 	const self = this;
-	log( 'connectContact', account );
-	const accId = account.clientId;
+	log( 'connectContact', accId );
 	const relation = await self.getRelation( accId, contactId );
 	if ( !relation )
 		return false;
@@ -102,21 +89,9 @@ ns.RoomCtrl.prototype.connectContact = async function( account, contactId ) {
 	if ( !room )
 		return null;
 	
-	await addToRoom( account );
-	const user = room.connect( account );
+	const user = room.connect( accId );
 	log( 'connectContact - done', !!user );
 	return user;
-	
-	function addToRoom( acc ) {
-		let roomId = room.id;
-		return new Promise(( resolve, reject ) => {
-			self.addToRoom( account, roomId, addBack );
-			function addBack() {
-				log( 'addBack', roomId );
-				resolve();
-			}
-		});
-	}
 }
 
 ns.RoomCtrl.prototype.createRoom = function( account, conf, callback ) {

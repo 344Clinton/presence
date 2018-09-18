@@ -41,18 +41,32 @@ util.inherits( ns.ContactRoom, Room );
 ns.ContactRoom.prototype.setRelation = async function( relation ) {
     const self = this;
     log( 'setRelation', relation );
-    self.accIdA = relation.accountA;
-    self.accIdB = relation.accountB;
-    const roomDb = new dFace.RoomDB( self.dbPool, self.id );
-    self.authorized = [
-        self.accIdA,
-        self.accIdB,
+    const auth = [
+        relation.accountA,
+        relation.accountB,
     ];
-    roomDb.authorize(
+    
+    const roomDb = new dFace.RoomDB( self.dbPool, self.id );
+    await roomDb.authorize(
         self.id,
-        self.authorized,
+        auth,
     );
+    await self.loadUsers();
+    log( 'setRelation done', self.users );
 }
+
+ns.ContactRoom.prototype.connect = function( accountId ) {
+    const self = this;
+    log( 'connect', accountId );
+    const signal = self.bindUser( accountId );
+    if ( self.emptyTimer ) {
+        clearTimeout( self.emptyTimer );
+        self.emptyTimer = null;
+    }
+    
+    return signal;
+}
+
 
 ns.ContactRoom.prototype.getOtherAccount = function( accId ) {
     const self = this;
@@ -147,30 +161,12 @@ ns.ContactRoom.prototype.loadUsers = async function() {
     return true;
     
     async function add( dbUser ) {
-        log( 'add', dbUser );
-        let uid = dbUser.clientId;
-        let user = await self.idCache.get( uid );
-        
-        self.authorized.push( uid );
-        self.users[ uid ] = {
-            accountId   : uid,
-            accountName : user.name,
-            avatar      : user.avatar,
-            authed      : true,
-        };
-        
-        if ( self.accIdA )
-            self.accIdB = uid;
-        else
-            self.accIdA = uid;
-        
-        return true;
+        await self.addUser( dbUser.clientId );
     }
 }
 
-ns.ContactRoom.prototype.bindUser = function( account ) {
+ns.ContactRoom.prototype.bindUser = function( userId ) {
     const self = this;
-    const userId = account.clientId;
     log( 'bindUser', userId );
     const conf = self.users[ userId ];
     if ( !conf ) {
@@ -212,9 +208,8 @@ ns.ContactRoom.prototype.bindUser = function( account ) {
         accountId   : conf.accountId,
         accountName : conf.accountName,
         avatar      : conf.avatar,
-        owner       : conf.accountId === self.ownerId,
-        admin       : account.admin,
-        authed      : account.authed || conf.authed || false,
+        owner       : false,
+        authed      : true,
     };
     const user = new Signal( sigConf );
     self.users[ userId ] = user;
@@ -317,37 +312,33 @@ ns.ContactRoom.prototype.initialize =  function( requestId, userId ) {
     }
 }
 
-ns.ContactRoom.prototype.addUser = async function( acc, callback ) {
+ns.ContactRoom.prototype.addUser = async function( userId ) {
     const self = this;
     // add to users
-    log( 'addUser', acc );
-    const uid = acc.accountId;
-    if ( self.users[ uid ]) {
-        callback( null, uid );
-        return;
+    log( 'addUser', userId );
+    if ( self.users[ userId ]) {
+        return false;
     }
     
-    let user = null;
-    user = await self.idCache.get( uid );
-    log( 'user', user );
-    acc.avatar = acc.avatar || user.avatar;
-    acc.authed = true;
-    self.users[ uid ] = acc;
-    const joinEvent = {
-        type : 'join',
-        data : {
-            clientId   : uid,
-            name       : acc.accountName,
-            avatar     : acc.avatar,
-            owner      : acc.accountId === self.ownerId,
-            admin      : acc.admin || undefined,
-            authed     : acc.authed || undefined,
-            guest      : acc.guest || undefined,
-            workgroups : null,
-        },
+    const user = await self.idCache.get( userId );
+    log( 'addUser - user', user );
+    self.authorized.push( userId );
+    self.users[ userId ] = {
+        accountId   : userId,
+        accountName : user.name,
+        avatar      : user.avatar,
+        authed      : true,
     };
-    self.broadcast( joinEvent, uid );
-    callback( null, uid );
+    
+    if ( self.accIdB )
+        return true;
+    
+    if ( self.accIdA )
+        self.accIdB = userId;
+    else
+        self.accIdA = userId;
+    
+    return true;
 }
 
 
