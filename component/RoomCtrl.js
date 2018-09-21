@@ -455,7 +455,7 @@ ns.RoomCtrl.prototype.bindContactRoom = function( room ) {
 	const self = this;
 	let rId = room.id;
 	room.on( 'empty', onEmpty );
-	function onEmpty( e ) { self.removeRoom( roomId ); }
+	function onEmpty( e ) { self.removeRoom( rId ); }
 }
 
 ns.RoomCtrl.prototype.handleWorkgroupAssigned = function( worg, roomId ) {
