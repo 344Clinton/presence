@@ -754,6 +754,10 @@ ns.NoMansLand.prototype.restoreSession = function( sessionId, clientId ) {
 
 ns.NoMansLand.prototype.removeFromSession = function( sessionId, clientId, callback ) {
 	const self = this;
+	log( 'removeFromSession', [
+		sessionId,
+		clientId,
+	]);
 	const session = self.getSession( sessionId );
 	if ( !session ) {
 		log( 'removeFromSession - no session for', sessionId );
@@ -765,6 +769,7 @@ ns.NoMansLand.prototype.removeFromSession = function( sessionId, clientId, callb
 
 ns.NoMansLand.prototype.sessionClosed = function( sessionId ) {
 	const self = this;
+	log( 'sessionClosed', sessionId );
 	const session = self.sessions[ sessionId ];
 	if ( !session )
 		return;

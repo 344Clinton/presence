@@ -55,12 +55,14 @@ util.inherits( ns.RoomCtrl, Emitter );
 
 // Public
 
-ns.RoomCtrl.prototype.openContact = async function( accId, contactId ) {
+ns.RoomCtrl.prototype.connectContact = async function( accId, contactId ) {
 	const self = this;
 	log( 'openContact', [
 		accId,
 		contactId,
 	]);
+	if ( accId === contactId )
+		return null;
 	
 	let room = null;
 	try {
@@ -75,22 +77,6 @@ ns.RoomCtrl.prototype.openContact = async function( accId, contactId ) {
 	};
 	self.emit( contactId, join, accId );
 	const user = room.connect( accId );
-	return user;
-}
-
-ns.RoomCtrl.prototype.connectContact = async function( accId, contactId ) {
-	const self = this;
-	log( 'connectContact', accId );
-	const relation = await self.getRelation( accId, contactId );
-	if ( !relation )
-		return false;
-	
-	const room = await self.getRoom( relation.roomId );
-	if ( !room )
-		return null;
-	
-	const user = room.connect( accId );
-	log( 'connectContact - done', !!user );
 	return user;
 }
 
@@ -596,7 +582,6 @@ ns.RoomCtrl.prototype.getContactRoom = async function( accId, contactId ) {
 	if ( !relation )
 		relation = await self.setRelation( accId, contactId );
 	
-	
 	if ( !relation )
 		return null;
 	
@@ -622,7 +607,7 @@ ns.RoomCtrl.prototype.getContactRoom = async function( accId, contactId ) {
 		if ( !room )
 			return null;
 		
-		log( 'getRoom res', room );
+		log( 'getRoom res', !!room );
 		return room;
 	}
 	

@@ -610,6 +610,14 @@ ns.RoomDB.prototype.dismissWorkgroup = function( fWgId, roomId ) {
 ns.RoomDB.prototype.setRelation = async function( accIdA, accIdB ) {
 	const self = this;
 	const relationId = uuid.get( 'rel' );
+	if ( accIdA === accIdB ) {
+		roomLog( 'setRelation - same ids', {
+			a : accIdA,
+			b : accIdB,
+		});
+		throw new Error( 'ERR_INVALID_RELATION_ID' );
+	}
+	
 	const values = [
 		relationId,
 		accIdA,

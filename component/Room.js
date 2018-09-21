@@ -90,6 +90,7 @@ ns.Room.prototype.connect = function( account ) {
 // when user goes offline
 ns.Room.prototype.disconnect = function( accountId ) {
 	const self = this;
+	log( 'disconnect', accountId );
 	if ( isAuthorized( accountId ))
 		self.releaseUser( accountId );
 	else
@@ -163,6 +164,7 @@ ns.Room.prototype.addUser = function( user, callback ) {
 // 
 ns.Room.prototype.removeUser = function( accountId ) {
 	const self = this;
+	log( 'removeUser', accountId );
 	const user = self.users[ accountId ];
 	if ( !user ) {
 		log( 'removeUser - invalid user', {

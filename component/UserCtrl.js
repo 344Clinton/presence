@@ -96,8 +96,8 @@ ns.UserCtrl.prototype.remove = function( accountId ) {
 	const acc = self.accounts[ accountId ];
 	delete self.accounts[ accountId ];
 	self.accIds = Object.keys( self.accounts );
+	acc.close();
 	
-	const worgs = acc.getWorkgroups();
 	self.worgs.removeUser( accountId );
 }
 
