@@ -356,13 +356,13 @@ ns.Account.prototype.loadRooms = async function() {
 	await Promise.all( list.map( await connect ));
 	return true;
 	
-	async function connect( room ) {
+	async function connect( roomConf ) {
 		const account = self.buildRoomAccount();
 		let room = null;
-		if ( room.wgs )
-			room = await self.roomCtrl.connectWorkgroup( account, room.clientId );
+		if ( roomConf.wgs )
+			room = await self.roomCtrl.connectWorkgroup( account, roomConf.clientId );
 		else
-			room = await self.roomCtrl.connect( account, room.clientId );
+			room = await self.roomCtrl.connect( account, roomConf.clientId );
 		
 		if ( !room )
 			return false;
