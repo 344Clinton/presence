@@ -64,6 +64,9 @@ ns.Account.prototype.close = function() {
 		delete self.roomCtrl;
 		delete self.worgCtrl;
 		delete self.onclose;
+		delete self.contacts;
+		delete self.contactIds;
+		delete self.relations;
 	}
 }
 
@@ -75,15 +78,18 @@ ns.Account.prototype.getWorkgroups = function() {
 	return self.worgCtrl.get( self.id );
 }
 
+ns.Account.prototype.getContactList = function() {
+	const self = this;
+	return self.contactIds;
+}
+
 ns.Account.prototype.updateContactList = function( contacts ) {
 	const self = this;
-	self.log( 'updateContactList', contacts );
 	contacts.forEach( id => self.addContact( id ));
 }
 
 ns.Account.prototype.addContact = function( contact ) {
 	const self = this;
-	self.log( 'addContact', contact );
 	const cId = contact.clientId;
 	if ( cId === self.id )
 		return;
@@ -93,6 +99,7 @@ ns.Account.prototype.addContact = function( contact ) {
 	
 	self.rooms.listen( cId, contactEvent );
 	self.contacts[ cId ] = contact;
+	self.contactIds.push( cId );
 	const cAdd = {
 		type : 'contact-add',
 		data : contact,
@@ -125,7 +132,7 @@ ns.Account.prototype.removeContact = function( contactId ) {
 
 // Private
 
-ns.Account.prototype.init = function() {
+ns.Account.prototype.init = async function() {
 	const self = this;
 	// prepare 'personalized' logging
 	var logStr = 'Account-' + self.login;
@@ -157,7 +164,11 @@ ns.Account.prototype.init = function() {
 	//self.rooms.on( 'join', joinedRoom );
 	//self.rooms.on( 'leave', leftRoom );
 	
-	function onNoClients() { self.close(); }
+	await self.loadRooms();
+	await self.loadRelations();
+	
+	return true;
+	
 	function init( e, cid ) { self.initializeClient( e, cid ); }
 	function identity( e, cid ) { self.updateIdentity( e, cid ); }
 	function handleSettings( e, cid ) { self.handleSettings( e, cid ); }
@@ -186,7 +197,7 @@ ns.Account.prototype.handleRoomCtrlEvent = function( event, roomId ) {
 	handler( event.data, roomId );
 }
 
-ns.Account.prototype.handleWorkgroupJoin = function( event, roomId ) {
+ns.Account.prototype.handleWorkgroupJoin = async function( event, roomId ) {
 	const self = this;
 	self.log( 'handleWorkgorupJoin', roomId );
 	if ( self.rooms.isParticipant( roomId )) {
@@ -195,19 +206,19 @@ ns.Account.prototype.handleWorkgroupJoin = function( event, roomId ) {
 	}
 	
 	const account = self.buildRoomAccount();
-	self.roomCtrl.connectWorkgroup( account, roomId, roomBack );
-	function roomBack( err, room ) {
-		self.log( 'joinWorkgroup roomBack', room );
-		if ( err )
-			return;
-		
-		self.joinedARoomHooray( room );
-	}
+	let room = null;
+	room = await self.roomCtrl.connectWorkgroup( account, roomId );
+	if ( !room )
+		return;
+	
+	await self.joinedARoomHooray( room );
+	return true;
 }
 
 ns.Account.prototype.openContactChat = async function( event, contactId ) {
 	const self = this;
 	self.log( 'openContactChat', [
+		event,
 		contactId,
 	]);
 	if ( !contactId )
@@ -225,6 +236,7 @@ ns.Account.prototype.openContactChat = async function( event, contactId ) {
 		return null;
 	}
 	
+	self.relations[ contactId ] = true;
 	await self.joinedARoomHooray( room );
 	const active = {
 		type : 'active',
@@ -261,8 +273,8 @@ ns.Account.prototype.initializeClient = function( event, clientId ) {
 		return;
 	
 	self.initialized = true;
-	self.loadRooms();
-	self.loadRelations();
+	//self.loadRooms();
+	//self.loadRelations();
 }
 
 ns.Account.prototype.setIdentity = function( id ) {
@@ -327,38 +339,36 @@ ns.Account.prototype.handleSettings = function( msg, cid ) {
 	self.log( 'handleSettings - NYI', msg );
 }
 
-ns.Account.prototype.loadRooms = function() {
+ns.Account.prototype.loadRooms = async function() {
 	const self = this;
 	const roomDb = new dFace.RoomDB( self.dbPool );
 	const memberWorgs = self.worgCtrl.getMemberOfAsFID( self.id );
 	self.log( 'memberWorgs', memberWorgs );
-	roomDb.getForAccount( self.id, memberWorgs )
-		.then( roomsBack )
-		.catch( loadError );
-	
-	function roomsBack( list ) {
-		self.log( 'roomsBack', list );
-		list.forEach( connect );
-		function connect( room ) {
-			const account = self.buildRoomAccount();
-			if ( room.wgs )
-				self.roomCtrl.connectWorkgroup( account, room.clientId, roomBack );
-			else
-				self.roomCtrl.connect( account, room.clientId, roomBack );
-		}
+	let list = null;
+	try {
+		list = await roomDb.getForAccount( self.id, memberWorgs );
+	} catch( e ) {
+		self.log( 'loadRooms - failed to load room list' );
+		return false;
 	}
 	
-	function roomBack( err, room ) {
-		if ( err ) {
-			self.log( 'loadRoom.roomBack err', err.stack || err );
-			return;
-		}
+	self.log( 'roomsBack', list );
+	await Promise.all( list.map( await connect ));
+	return true;
+	
+	async function connect( room ) {
+		const account = self.buildRoomAccount();
+		let room = null;
+		if ( room.wgs )
+			room = await self.roomCtrl.connectWorkgroup( account, room.clientId );
+		else
+			room = await self.roomCtrl.connect( account, room.clientId );
 		
-		self.joinedARoomHooray( room );
-	}
-	
-	function loadError( err ) {
-		self.log( 'roomLoadErr', err.stack || err );
+		if ( !room )
+			return false;
+		
+		await self.joinedARoomHooray( room );
+		return true;
 	}
 }
 
@@ -374,23 +384,31 @@ ns.Account.prototype.loadRelations = async function() {
 	}
 	
 	self.log( 'loadRelations', dbRelations );
-	dbRelations.forEach( setRelation );
-	const contactList = Object.keys( self.relations );
+	const contactList = dbRelations.map( getContactId );
 	const newList = contactList.filter( notInContacts );
 	self.log( 'newList', newList );
 	if ( !newList.length )
 		return;
 	
+	newList.forEach( setRelation );
 	const identityList = await self.idCache.getList( newList );
 	self.updateContactList( identityList );
 	
-	function setRelation( rel ) {
-		let contactId = ( rel.accountA === self.id ) ? rel.accountB : rel.accountA;
-		self.relations[ contactId ] = rel;
+	return true;
+	
+	function getContactId( rel ) {
+		if ( rel.accountA === self.id )
+			return rel.accountB;
+		else
+			return rel.accountA;
 	}
 	
 	function notInContacts( cId ) {
 		return !self.contacts[ cId ];
+	}
+	
+	function setRelation( cId ) {
+		self.relations[ cId ] = true;
 	}
 }
 
@@ -531,7 +549,7 @@ ns.Account.prototype.logout = function( callback ) {
 	const self = this;
 	self.log( 'logout' );
 	if ( self.roomCtrl )
-		self.roomCtrl.off( self.wgAssEventId );
+		self.roomCtrl.release( self.id );
 	
 	if ( self.rooms )
 		self.rooms.close();

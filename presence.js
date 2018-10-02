@@ -19,7 +19,7 @@
 
 'use strict';
 
-const log = require( './component/Log' )( 'init' );
+const log = require( './component/Log' )( 'main' );
 const MySQLPool = require( './component/MysqlPool' );
 const IdCache = require( './component/IdentityCache' );
 const WorgCtrl = require( './component/WorgCtrl' );
@@ -28,7 +28,7 @@ const RoomCtrl = require( './component/RoomCtrl' );
 const NML = require( './component/NoMansLand' );
 require( './component/Config' ); // writes to global.config
 
-log( 'conf', global.config, 4 );
+//log( 'conf', global.config, 4 );
 
 const presence = {
 	conn  : null,
@@ -61,3 +61,7 @@ function openComms() {
 	);
 }
 
+process.on( 'unhandledRejection', err => {
+	log( 'ERRPR', err, 3 );
+	//process.exit( 666 );
+});

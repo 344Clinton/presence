@@ -76,12 +76,14 @@ ns.ContactRoom.prototype.getOtherAccount = function( accId ) {
     else
         otherId = self.accIdA;
     
+    /*
     log ( 'getOtherAccount', {
         in  : accId,
         a   : self.accIdA,
         b   : self.accIdB,
         out : otherId,
     });
+    */
     return self.users[ otherId ];
 }
 
@@ -167,7 +169,6 @@ ns.ContactRoom.prototype.loadUsers = async function() {
 
 ns.ContactRoom.prototype.bindUser = function( userId ) {
     const self = this;
-    log( 'bindUser', userId );
     const conf = self.users[ userId ];
     if ( !conf ) {
         log( 'bindUSer - no user for id', {
@@ -183,7 +184,6 @@ ns.ContactRoom.prototype.bindUser = function( userId ) {
         return null;
     }
     
-    log( 'bindUser - user', conf );
     if ( conf.close ) {
         log( 'bindUser - user already bound', {
             userId : userId,
@@ -196,7 +196,7 @@ ns.ContactRoom.prototype.bindUser = function( userId ) {
     delete self.users[ userId ];
     
     const otherAcc = self.getOtherAccount( userId );
-    log( 'otherAcc', otherAcc );
+    //log( 'otherAcc', otherAcc );
     const otherId = otherAcc.accountId;
     const otherName = otherAcc.accountName;
     // add signal user obj
