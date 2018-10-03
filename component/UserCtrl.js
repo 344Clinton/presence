@@ -72,9 +72,12 @@ ns.UserCtrl.prototype.addAccount = async function( session, conf ) {
 	self.accounts[ aId ] = account;
 	self.accIds.push( aId );
 	
-	const contacts = account.getContactList() || [];
-	log( 'addAccount - contacts', contacts );
-	self.broadcastOnlineStatus( contacts, accId, true );
+	self.broadcastOnlineStatus( accId, true );
+	setTimeout( uo, 1000 );
+	function uo() {
+		log( 'uo' );
+		self.updateOnlineStatus( accId );
+	}
 	//self.setContactList( aId );
 }
 
@@ -98,10 +101,9 @@ ns.UserCtrl.prototype.remove = function( accountId ) {
 	if ( !acc )
 		return;
 	
+	self.broadcastOnlineStatus( accountId, false );
 	delete self.accounts[ accountId ];
 	self.accIds = Object.keys( self.accounts );
-	const contacts = acc.getContactList();
-	self.broadcastOnlineStatus( contacts, accountId, false );
 	acc.close();
 	
 	self.worgs.removeUser( accountId );
@@ -166,20 +168,38 @@ ns.UserCtrl.prototype.handleWorgUserRemoved = function( removedId, memberOf ) {
 	}
 }
 
-ns.UserCtrl.prototype.broadcastOnlineStatus = function( affectedIds, subjectId, isOnline ) {
+ns.UserCtrl.prototype.broadcastOnlineStatus = function( subjectId, isOnline ) {
 	const self = this;
 	log( 'broadcastOnlineStatus', [
-		affectedIds.length,
 		subjectId,
 		isOnline,
 	]);
 	
-	affectedIds.forEach( cId => {
+	const subAcc = self.accounts[ subjectId ];
+	const contacts = subAcc.getContactList() || [];
+	contacts.forEach( cId => {
 		const acc = self.accounts[ cId ];
 		if ( !acc || !acc.updateContactStatus )
 			return;
 		
 		acc.updateContactStatus( subjectId, 'online', isOnline );
+	});
+}
+
+ns.UserCtrl.prototype.updateOnlineStatus = function( accountId ) {
+	const self = this;
+	log( 'updateOnlineStatus', accountId );
+	let account = self.accounts[ accountId ];
+	if ( !account || !account.updateContactStatus )
+		return;
+	
+	const contacts = account.getContactList() || [];
+	contacts.forEach( cId => {
+		let contact = self.accounts[ cId ];
+		if ( !contact )
+			return;
+		
+		account.updateContactStatus( cId, 'online', true );
 	});
 }
 
