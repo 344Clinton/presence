@@ -25,6 +25,11 @@ const uuid = require( './UuidPrefix' )( '' );
 const util = require( 'util' );
 
 var ns = {};
+
+/*
+	ACCOUNT CONSTRUCTOR RETURNS A PROMISE
+	dealwithit.jpg
+*/
 ns.Account = function(
 	session,
 	conf,
@@ -50,7 +55,18 @@ ns.Account = function(
 	self.contactIds = [];
 	self.relations = {};
 	
-	self.init();
+	return new Promise(( resolve, reject ) => {
+		self.init()
+			.then( initDone )
+			.catch( initOpps );
+		
+		function initDone() {
+			self.log( 'initDone' );
+			resolve( self );
+		}
+		
+		function initOpps( err ) {}
+	});
 }
 
 // Public
@@ -130,6 +146,21 @@ ns.Account.prototype.removeContact = function( contactId ) {
 	self.session.send( cRemove );
 }
 
+ns.Account.prototype.updateContactStatus = function( contactId, type, value ) {
+	const self = this;
+	self.log( 'updateContactStatus', [
+		contactId,
+		type,
+		value,
+	]);
+	const event = {
+		type : type,
+		data : value,
+	};
+	
+	self.sendContactEvent( contactId, event );
+}
+
 // Private
 
 ns.Account.prototype.init = async function() {
@@ -166,6 +197,7 @@ ns.Account.prototype.init = async function() {
 	
 	await self.loadRooms();
 	await self.loadRelations();
+	await self.loadContacts();
 	
 	return true;
 	
@@ -352,7 +384,6 @@ ns.Account.prototype.loadRooms = async function() {
 		return false;
 	}
 	
-	self.log( 'roomsBack', list );
 	await Promise.all( list.map( await connect ));
 	return true;
 	
@@ -409,6 +440,19 @@ ns.Account.prototype.loadRelations = async function() {
 	
 	function setRelation( cId ) {
 		self.relations[ cId ] = true;
+	}
+}
+
+ns.Account.prototype.loadContacts = async function() {
+	const self = this;
+	let contactIds = self.worgCtrl.getContactList( self.id );
+	contactIds = contactIds.filter( notLoaded );
+	const contacts = await self.idCache.getList( contactIds );
+	self.updateContactList( contacts );
+	return true;
+	
+	function notLoaded( cId ) {
+		return !self.contacts[ cId ];
 	}
 }
 
@@ -527,6 +571,19 @@ ns.Account.prototype.handleContactEvent = function( event, clientId ) {
 		event,
 		clientId,
 	]);
+}
+
+ns.Account.prototype.sendContactEvent = function( contactId, event ) {
+	const self = this;
+	const wrap = {
+		type : 'contact-event',
+		data : {
+			contactId : contactId,
+			event     : event,
+		},
+	};
+	self.log( 'sendContactEvent', wrap, 3 );
+	self.session.send( wrap );
 }
 
 ns.Account.prototype.someContactFnNotInUse = async function( event, clientId ) {

@@ -55,7 +55,7 @@ ns.UserCtrl.prototype.addAccount = async function( session, conf ) {
 	delete conf.workgroups;
 	
 	self.worgs.addUser( accId, worgs );
-	const account = new Account(
+	const account = await new Account(
 		session,
 		conf,
 		self.dbPool,
@@ -64,6 +64,7 @@ ns.UserCtrl.prototype.addAccount = async function( session, conf ) {
 		self.worgs,
 	);
 	
+	log( 'addAccount', account );
 	let aId = account.id;
 	if ( self.accounts[ aId ])
 		return;
@@ -71,7 +72,10 @@ ns.UserCtrl.prototype.addAccount = async function( session, conf ) {
 	self.accounts[ aId ] = account;
 	self.accIds.push( aId );
 	
-	self.setContactList( aId );
+	const contacts = account.getContactList() || [];
+	log( 'addAccount - contacts', contacts );
+	self.broadcastOnlineStatus( contacts, accId, true );
+	//self.setContactList( aId );
 }
 
 ns.UserCtrl.prototype.addGuest = function( session, conf ) {
@@ -90,12 +94,14 @@ ns.UserCtrl.prototype.addGuest = function( session, conf ) {
 ns.UserCtrl.prototype.remove = function( accountId ) {
 	const self = this;
 	log( 'remove', accountId );
-	if ( !self.accounts[ accountId ])
+	const acc = self.accounts[ accountId ];
+	if ( !acc )
 		return;
 	
-	const acc = self.accounts[ accountId ];
 	delete self.accounts[ accountId ];
 	self.accIds = Object.keys( self.accounts );
+	const contacts = acc.getContactList();
+	self.broadcastOnlineStatus( contacts, accountId, false );
 	acc.close();
 	
 	self.worgs.removeUser( accountId );
@@ -160,6 +166,24 @@ ns.UserCtrl.prototype.handleWorgUserRemoved = function( removedId, memberOf ) {
 	}
 }
 
+ns.UserCtrl.prototype.broadcastOnlineStatus = function( affectedIds, subjectId, isOnline ) {
+	const self = this;
+	log( 'broadcastOnlineStatus', [
+		affectedIds.length,
+		subjectId,
+		isOnline,
+	]);
+	
+	affectedIds.forEach( cId => {
+		const acc = self.accounts[ cId ];
+		if ( !acc || !acc.updateContactStatus )
+			return;
+		
+		acc.updateContactStatus( subjectId, 'online', isOnline );
+	});
+}
+
+/* account object does this now
 ns.UserCtrl.prototype.setContactList = async function( accId ) {
 	const self = this;
 	const acc = self.accounts[ accId ];
@@ -176,5 +200,6 @@ ns.UserCtrl.prototype.buildContactListFor = async function( accId ) {
 	ids = await self.idc.getList( list );
 	return ids;
 }
+*/
 
 module.exports = ns.UserCtrl;

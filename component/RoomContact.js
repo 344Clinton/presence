@@ -243,6 +243,7 @@ ns.ContactRoom.prototype.bindUser = function( userId ) {
 
 ns.ContactRoom.prototype.setOnline = function( userId ) {
     const self = this;
+    log( 'setOnline', userId );
     const user = self.users[ userId ];
     if ( !user )
         return null;
@@ -250,15 +251,41 @@ ns.ContactRoom.prototype.setOnline = function( userId ) {
     self.onlineList.push( userId );
     const online = {
         type : 'online',
-        data : {
-            clientId   : userId,
-            admin      : user.admin || false,
-            authed     : user.authed || false,
-            workgroups : null,
-        }
+        data : true,
     };
-    self.broadcast( online );
+    const otherAcc = self.getOtherAccount( userId );
+    self.send( online, otherAcc.accountId );
     return user;
+}
+
+ns.ContactRoom.prototype.setOffline = function( userId ) {
+    const self = this;
+    log( 'setOffline', userId );
+    const user = self.users[ userId ];
+    
+    // deleteing signal
+    delete self.users[ userId ];
+    // adding basic obj
+    self.users[ userId ] = {
+        accountId    : user.accountId,
+        accountName  : user.accountName,
+        avatar       : user.avatar,
+        admin        : user.admin,
+        authed       : user.authed,
+        guest        : user.guest,
+    };
+    
+    const userIndex = self.onlineList.indexOf( userId );
+    if ( -1 !== userIndex ) {
+        let removed = self.onlineList.splice( userIndex, 1 );
+    }
+    
+    const offline = {
+        type : 'online',
+        data : false
+    };
+    const otherAcc = self.getOtherAccount( userId );
+    self.send( offline, otherAcc.accountId );
 }
 
 ns.ContactRoom.prototype.initialize =  function( requestId, userId ) {
