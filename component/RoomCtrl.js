@@ -71,12 +71,18 @@ ns.RoomCtrl.prototype.connectContact = async function( accId, contactId ) {
 		return null;
 	}
 	
+	if ( !room )
+		return null;
+	
+	const user = room.connect( accId );
+	if ( !user )
+		return null;
+	
 	const join = {
 		type : 'contact-join',
 		data : null,
 	};
 	self.emit( contactId, join, accId );
-	const user = room.connect( accId );
 	return user;
 }
 
@@ -576,16 +582,10 @@ ns.RoomCtrl.prototype.getContactRoom = async function( accId, contactId ) {
 		return null;
 	
 	//log( 'getContactRoom - relation', relation );
-	if ( relation.roomId ) {
+	if ( relation.roomId )
 		room = await loadRoom( relation.roomId );
-	}
-	else {
-		try {
-			room = await createRoom( relation.clientId, accId, contactId );
-		} catch ( e ) {
-			log( 'F', e );
-		}
-	}
+	else
+		room = await createRoom( relation.clientId, accId, contactId );
 	
 	return room;
 	
@@ -619,13 +619,6 @@ ns.RoomCtrl.prototype.getContactRoom = async function( accId, contactId ) {
 		
 		await room.setRelation( relation );
 		return room;
-		
-		function authBack( err, res ) {
-			log( 'authBack', [
-				err,
-				res,
-			]);
-		}
 	}
 }
 
@@ -708,6 +701,7 @@ ns.RoomCtrl.prototype.getRelation = async function( accIdA, accIdB ) {
 		return null;
 	
 	self.relations[ relation.clientId ] = relation;
+	self.relationIds = Object.keys( self.relations );
 	return relation || null;
 }
 

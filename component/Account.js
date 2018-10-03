@@ -415,7 +415,7 @@ ns.Account.prototype.loadRelations = async function() {
 	}
 	
 	self.log( 'loadRelations', dbRelations );
-	const contactList = dbRelations.map( getContactId );
+	const contactList = dbRelations.map( rel => rel.contactId );
 	const newList = contactList.filter( notInContacts );
 	self.log( 'newList', newList );
 	if ( !newList.length )
@@ -426,13 +426,6 @@ ns.Account.prototype.loadRelations = async function() {
 	self.updateContactList( identityList );
 	
 	return true;
-	
-	function getContactId( rel ) {
-		if ( rel.accountA === self.id )
-			return rel.accountB;
-		else
-			return rel.accountA;
-	}
 	
 	function notInContacts( cId ) {
 		return !self.contacts[ cId ];

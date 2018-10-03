@@ -42,8 +42,8 @@ ns.ContactRoom.prototype.setRelation = async function( relation ) {
     const self = this;
     log( 'setRelation', relation );
     const auth = [
-        relation.accountA,
-        relation.accountB,
+        relation.rows[ 0 ].userId,
+        relation.rows[ 1 ].userId,
     ];
     
     const roomDb = new dFace.RoomDB( self.dbPool, self.id );

@@ -635,10 +635,10 @@ ns.RoomDB.prototype.setRelation = async function( accIdA, accIdB ) {
 		throw new Error( 'ERR_DB_FAILED' );
 	}
 	
-	if ( !res.rows )
+	if ( !res || !res.rows )
 		throw new Error( 'ERR_DB_SET_RELATION' );
 	
-	return res.rows[0] || null;
+	return self.rowsToRelation( res.rows );
 }
 
 ns.RoomDB.prototype.assignRelationRoom = async function( relationId, roomId ) {
@@ -681,11 +681,11 @@ ns.RoomDB.prototype.getRelation = async function( accIdA, accIdB ) {
 		throw new Error( 'ERR_DB_FAILED' );
 	}
 	
-	roomLog( 'getRelation - res', res );
-	if ( !res.rows )
-		throw new Error( 'ERR_DB_GET_RELATION' );
+	if ( !res || !res.rows )
+		return null;
 	
-	return res.rows[0] || null;
+	roomLog( 'getRelation - res', res );
+	return self.rowsToRelation( res.rows );
 }
 
 ns.RoomDB.prototype.getRelationsFor = async function( accId ) {
@@ -830,6 +830,26 @@ ns.RoomDB.prototype.init = function() {
 	const self = this;
 	
 }
+
+ns.RoomDB.prototype.rowsToRelation = function( rows ) {
+	const self = this;
+	roomLog( 'rowsToRelation', rows );
+	if ( !rows || ( 2 !== rows.length ))
+		return null;
+	
+	const rowA = rows[ 0 ];
+	const rowB = rows[ 1 ];
+	const relation = {
+		clientId    : rowA.relationId,
+		roomId      : rowA.roomId,
+		relations   : rows,
+	};
+	relation[ rowA.userId ] = rowA;
+	relation[ rowB.userId ] = rowB;
+	roomLog( 'rowsToRelation - relation', relation );
+	return relation;
+}
+
 
 //
 // Message

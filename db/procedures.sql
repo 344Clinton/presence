@@ -596,25 +596,39 @@ END//
 #
 # USER_RELATION_CREATE
 CREATE PROCEDURE user_relation_create(
-	IN `clientId` VARCHAR( 191 ),
-	IN `accountA` VARCHAR( 191 ),
-	IN `accountB` VARCHAR( 191 ),
-	IN `roomId`   VARCHAR( 191 )
+	IN `relationId` VARCHAR( 191 ),
+	IN `accountA`   VARCHAR( 191 ),
+	IN `accountB`   VARCHAR( 191 ),
+	IN `roomId`     VARCHAR( 191 )
 )
 BEGIN
 INSERT INTO `user_relation` (
-	`clientId`,
-	`accountA`,
-	`accountB`,
+	`relationId`,
+	`userId`,
+	`contactId`,
 	`roomId`
 ) VALUES (
-	`clientId`,
+	`relationId`,
 	`accountA`,
 	`accountB`,
 	`roomId`
 );
+
+INSERT INTO `user_relation` (
+	`relationId`,
+	`userId`,
+	`contactId`,
+	`roomId`
+) VALUES (
+	`relationId`,
+	`accountB`,
+	`accountA`,
+	`roomId`
+);
+
 SELECT * FROM user_relation AS ur
-WHERE ur.accountA = `accountA` AND ur.accountB = `accountB`;
+WHERE ur.userId = `accountA` 
+	OR ur.userId = `accountB`;
 END//
 
 #
@@ -626,7 +640,7 @@ CREATE PROCEDURE user_relation_assign_room(
 BEGIN
 UPDATE user_relation AS ur
 SET ur.roomId = `roomId`
-WHERE ur.clientId = `relationId`;
+WHERE ur.relationId = `relationId`;
 END//
 
 #
@@ -637,14 +651,16 @@ CREATE PROCEDURE user_relation_read(
 )
 BEGIN
 SELECT
-	r.clientId,
-	r.accountA,
-	r.accountB,
+	r.relationId,
+	r.userId,
+	r.contactId,
 	r.roomId,
-	r.created
+	r.created,
+	r.lastReadId,
+	r.lastMsgId
 FROM user_relation AS r
-WHERE ( r.accountA = `accountA` AND r.accountB = `accountB` )
-OR ( r.accountA = `accountB` AND r.accountB = `accountA` );
+WHERE ( r.userId = `accountA` AND r.contactId = `accountB` )
+OR ( r.userId = `accountB` AND r.contactId = `accountA` );
 END//
 
 #
@@ -654,14 +670,15 @@ CREATE PROCEDURE user_relation_read_all_for(
 )
 BEGIN
 SELECT
-	r.clientId,
-	r.accountA,
-	r.accountB,
+	r.relationId,
+	r.userId,
+	r.contactId,
 	r.roomId,
-	r.created
+	r.created,
+	r.lastReadId,
+	r.lastMsgId
 FROM user_relation AS r
-WHERE r.accountA = `accountId`
-OR r.accountB = `accountId`;
+WHERE r.userId = `accountId`;
 END//
 
 #
