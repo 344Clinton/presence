@@ -40,10 +40,9 @@ util.inherits( ns.ContactRoom, Room );
 
 ns.ContactRoom.prototype.setRelation = async function( relation ) {
     const self = this;
-    log( 'setRelation', relation );
     const auth = [
-        relation.rows[ 0 ].userId,
-        relation.rows[ 1 ].userId,
+        relation.relations[ 0 ].userId,
+        relation.relations[ 1 ].userId,
     ];
     
     const roomDb = new dFace.RoomDB( self.dbPool, self.id );
@@ -52,7 +51,6 @@ ns.ContactRoom.prototype.setRelation = async function( relation ) {
         auth,
     );
     await self.loadUsers();
-    log( 'setRelation done', self.users );
 }
 
 ns.ContactRoom.prototype.connect = function( accountId ) {
@@ -99,13 +97,14 @@ ns.ContactRoom.prototype.init = function() {
     );
     
     async function settingsDone( err , res ) {
-        log( 'Log' );
-        self.log = new components.Log(
+        log( 'Log', self.ownerId );
+        self.log = new ns.ContactLog(
             self.dbPool,
             self.id,
             self.users,
+            self.onlineList,
             self.idCache,
-            self.persistent,
+            self.ownerId
         );
         
         log( 'Chat' );
@@ -373,7 +372,7 @@ ns.ContactRoom.prototype.addUser = async function( userId ) {
     ContactSettings
 */
 
-const sLog = require( './Log' )( 'Room > Settings' );
+const sLog = require( './Log' )( 'ContactRoom > Settings' );
 ns.ContactSettings = function(
     dbPool,
     roomId,
@@ -442,5 +441,60 @@ ns.ContactSettings.prototype.setDefaults = function() {
     //self.set( 'userLimit', 0 );
     //self.set( 'isStream', false );
 }
+
+
+/*
+    ContactLog
+*/
+const lLog = require( './Log' )( 'ContactRoom > Log' );
+ns.ContactLog = function(
+    dbPool,
+    roomId,
+    users,
+    onlineList,
+    idCache,
+    relationId
+) {
+    const self = this;
+    lLog( 'const - relId', relationId );
+    self.onlineList = onlineList;
+    self.relationId = relationId;
+    components.Log.call(
+        self,
+        dbPool,
+        roomId,
+        users,
+        idCache,
+        true
+    );
+}
+
+util.inherits( ns.ContactLog, components.Log );
+
+ns.ContactLog.prototype.persist = async function( event ) {
+    const self = this;
+    lLog( 'persist', event );
+    const item = event.data;
+    item.type = event.type;
+    const fromId = item.fromId;
+    try {
+        await self.msgDb.setForRelation( item, self.relationId, [] );
+    } catch( err ) {
+        lLog( 'persist - err', err );
+        return false;
+    }
+    
+    return true;
+}
+
+ns.ContactLog.prototype.baseClose = ns.ContactLog.prototype.close;
+ns.ContactLog.prototype.close = function() {
+    const self = this;
+    delete self.onlineList;
+    delete self.relationId;
+    self.baseClose();
+}
+
+//
 
 module.exports = ns.ContactRoom;

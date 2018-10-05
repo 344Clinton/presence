@@ -104,14 +104,20 @@ ns.Account.prototype.updateContactList = function( contacts ) {
 	contacts.forEach( id => self.addContact( id ));
 }
 
-ns.Account.prototype.addContact = function( contact ) {
+ns.Account.prototype.addContact = function( identity ) {
 	const self = this;
-	const cId = contact.clientId;
+	const cId = identity.clientId;
 	if ( cId === self.id )
 		return;
 	
 	if ( self.contacts[ cId ])
 		return;
+	
+	const contact = {
+		clientId : cId,
+		identity : identity,
+		relation : self.relations[ cId ] || {},
+	};
 	
 	self.rooms.listen( cId, contactEvent );
 	self.contacts[ cId ] = contact;
@@ -305,8 +311,6 @@ ns.Account.prototype.initializeClient = function( event, clientId ) {
 		return;
 	
 	self.initialized = true;
-	//self.loadRooms();
-	//self.loadRelations();
 }
 
 ns.Account.prototype.setIdentity = function( id ) {
@@ -350,13 +354,6 @@ ns.Account.prototype.setIdentity = function( id ) {
 			
 			self.log( 'updateIdentity nameErr', err.stack || err );
 		}
-	}
-	
-	function persistAvatar( avatar, callback ) {
-		const accDb = new dFace.AccountDB( self.dbPool );
-		accDb.updateAvatar( self.id, avatar )
-			.then( res => callback( null, res ))
-			.catch( callback );
 	}
 }
 
@@ -406,6 +403,7 @@ ns.Account.prototype.loadRooms = async function() {
 ns.Account.prototype.loadRelations = async function() {
 	const self = this;
 	const roomDb = new dFace.RoomDB( self.dbPool );
+	const msgDb = new dFace.MessageDB( self.dbPool );
 	let dbRelations = null;
 	try {
 		dbRelations = await roomDb.getRelationsFor( self.id );
@@ -415,15 +413,20 @@ ns.Account.prototype.loadRelations = async function() {
 	}
 	
 	self.log( 'loadRelations', dbRelations );
+	await Promise.all( dbRelations.map( await setRelation ));
 	const contactList = dbRelations.map( rel => rel.contactId );
 	const newList = contactList.filter( notInContacts );
 	self.log( 'newList', newList );
 	if ( !newList.length )
 		return;
 	
-	newList.forEach( setRelation );
 	const identityList = await self.idCache.getList( newList );
 	self.updateContactList( identityList );
+	try {
+		dbRelations.forEach( checkRoomAvailability );
+	} catch ( err ) {
+		self.log( 'blah', err );
+	}
 	
 	return true;
 	
@@ -431,8 +434,32 @@ ns.Account.prototype.loadRelations = async function() {
 		return !self.contacts[ cId ];
 	}
 	
-	function setRelation( cId ) {
-		self.relations[ cId ] = true;
+	async function setRelation( relation ) {
+		self.log( 'setRelation', relation );
+		let rId = relation.relationId;
+		let cId = relation.contactId;
+		if ( self.relations[ cId ])
+			return;
+		
+		let state = await msgDb.getRelationState( rId, cId );
+		self.log( 'loadRelations - setRelation state', state, 3 );
+		
+		if ( !state ) {
+			self.relations[ cId ] = true;
+			return;
+		}
+		
+		self.relations[ cId ] = state;
+	}
+	
+	async function checkRoomAvailability( rel ) {
+		self.log( 'checkRoomAvailability', rel );
+		const roomId = rel.roomId;
+		const isActive = self.roomCtrl.checkActive( roomId );
+		if ( !isActive )
+			return;
+		
+		self.openContactChat( null, rel.contactId );
 	}
 }
 
@@ -440,8 +467,8 @@ ns.Account.prototype.loadContacts = async function() {
 	const self = this;
 	let contactIds = self.worgCtrl.getContactList( self.id );
 	contactIds = contactIds.filter( notLoaded );
-	const contacts = await self.idCache.getList( contactIds );
-	self.updateContactList( contacts );
+	const identities = await self.idCache.getList( contactIds );
+	self.updateContactList( identities );
 	return true;
 	
 	function notLoaded( cId ) {

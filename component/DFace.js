@@ -71,7 +71,7 @@ ns.DB.prototype.query = function( fnName, values ) {
 				return;
 			}
 			
-			var queryString = self.buildCall( fnName, values.length );
+			const queryString = self.buildCall( fnName, values.length );
 			conn.query( queryString, values, queryBack );
 			function queryBack( err, res ) {
 				conn.release();
@@ -80,18 +80,23 @@ ns.DB.prototype.query = function( fnName, values ) {
 					return;
 				}
 				
-				var data = self.cleanResult( res );
+				const data = self.cleanResult( res );
 				if ( null == data ) {
 					reject( 'ERR_DB_PARSE' );
 					return;
 				}
-				var rows = data[ 0 ];
-				var meta = data[ 1 ];
-				var ret = {
-					rows : rows,
-					meta : meta,
+				
+				if( !data.pop ) {
+					resolve( [] );
+					return;
 				}
-				resolve( ret );
+				else
+					data.pop();
+				
+				if ( 1 === data.length )
+					resolve( data[ 0 ] );
+				else
+					resolve( data );
 			}
 		}
 	}
@@ -145,7 +150,7 @@ util.inherits( ns.AccountDB, ns.DB );
 
 // Public
 
-ns.AccountDB.prototype.set = function( login, pass, name ) {
+ns.AccountDB.prototype.set = async function( login, pass, name ) {
 	const self = this;
 	if ( !login ) {
 		accLog( 'set - login is required', {
@@ -173,39 +178,36 @@ ns.AccountDB.prototype.set = function( login, pass, name ) {
 		name,
 		settings,
 	];
-	return new Promise( doCreate );
-	function doCreate( resolve, reject ) {
-		self.query( 'account_create', values )
-			.then( createBack )
-			.catch( reject );
-		
-		function createBack( res ) {
-			resolve( res.rows );
-		}
-	}
+	
+	let res = await self.query( 'account_create', values );
+	return res[ 0 ];
 }
 
-ns.AccountDB.prototype.get = function( login ) {
+ns.AccountDB.prototype.get = async function( login ) {
 	const self = this;
-	return new Promise( readAcc );
-	function readAcc( resolve, reject ) {
-		var values = [ login ];
-		self.query( 'account_read', values )
-			.then( readBack )
-			.catch( reject );
-		
-		function readBack( res ) {
-			const acc = res.rows[ 0 ] || null;
-			
-			// lets remove some data
-			if ( acc ) {
-				delete acc._id;
-				delete acc.pass;
-			}
-			
-			resolve( acc );
-		}
+	const values = [ login ];
+	let res = null;
+	try {
+		res = await self.query( 'account_read', values );
+	} catch ( err ) {
+		accLog( 'get err', err );
+		throw new Error( err );
 	}
+	
+	accLog( 'get res', res, 4 );
+	if ( !res )
+		return null;
+	
+	const acc = res[ 0 ] || null;
+	accLog( 'get', acc );
+		
+	// lets remove some data
+	if ( acc ) {
+		delete acc._id;
+		delete acc.pass;
+	}
+	
+	return acc;
 }
 
 ns.AccountDB.prototype.getById = function( accountId ) {
@@ -218,12 +220,12 @@ ns.AccountDB.prototype.getById = function( accountId ) {
 			.catch( reject );
 		
 		function accBack( res ) {
-			if ( !res || !res.rows ) {
+			if ( !res ) {
 				reject( 'ERR_DB_INVALID_RES_WUT_???' );
 				return;
 			}
 			
-			let acc = res.rows[ 0 ] || null;
+			let acc = res[ 0 ] || null;
 			resolve( acc );
 		}
 	}
@@ -356,10 +358,10 @@ ns.RoomDB.prototype.set = function( clientId, name, ownerId, isPrivate ) {
 			.catch( reject );
 		
 		function roomBack( res ) {
-			if ( !res || !res.rows )
+			if ( !res )
 				reject( 'ERR_ROOM_SET_NO_ROWS' );
 			
-			resolve( res.rows[ 0 ] );
+			resolve( res[ 0 ] );
 		}
 	}
 }
@@ -374,8 +376,8 @@ ns.RoomDB.prototype.get = function( clientId ) {
 			.catch( reject );
 		
 		function loaded( res ) {
-			if ( res && res.rows )
-				resolve( res.rows[ 0 ] || null );
+			if ( res )
+				resolve( res[ 0 ] || null );
 			else
 				reject( 'ERR_NO_ROOM_???' );
 		}
@@ -428,12 +430,12 @@ ns.RoomDB.prototype.loadAuthorizations = function( roomId ) {
 			.catch( reject );
 			
 		function loadBack( res ) {
-			if ( !res || !res.rows ) {
+			if ( !res ) {
 				reject( 'ERR_NO_ROWS_???', res );
 				return;
 			}
 			
-			resolve( res.rows );
+			resolve( res );
 		}
 	}
 }
@@ -481,7 +483,7 @@ ns.RoomDB.prototype.getForAccount = function( accountId, workgroups ) {
 				.then( accBack )
 				.catch( accErr );
 			
-			function accBack( res ) { callback( null, res.rows ); }
+			function accBack( res ) { callback( null, res ); }
 			function accErr( err ) { callback( err, null ); }
 		}
 		
@@ -495,7 +497,7 @@ ns.RoomDB.prototype.getForAccount = function( accountId, workgroups ) {
 				.catch( wgErr );
 				
 			function wgBack( res ) {
-				const rows = res.rows;
+				const rows = res;
 				const mapped = {};
 				rows.forEach( setInMap );
 				const ids = Object.keys( mapped );
@@ -541,12 +543,12 @@ ns.RoomDB.prototype.getAssignedWorkgroups = function() {
 			.catch( reject );
 		
 		function worgsBack( res ) {
-			if ( !res || !res.rows ) {
+			if ( !res ) {
 				reject( 'ERR_NO_ROWS' );
 				return;
 			}
 			
-			let worgs = res.rows;
+			let worgs = res;
 			resolve( worgs );
 		}
 	}
@@ -576,8 +578,7 @@ ns.RoomDB.prototype.assignWorkgroup = function( fWgId, setById, roomId ) {
 			.then( done )
 			.catch( reject );
 			
-		function done( res ) {
-			const rows = res.rows;
+		function done( rows ) {
 			resolve( rows[ 0 ] );
 		}
 	}
@@ -600,8 +601,7 @@ ns.RoomDB.prototype.dismissWorkgroup = function( fWgId, roomId ) {
 			.then( done )
 			.catch( reject );
 		
-		function done( res ) {
-			const rows = res.rows;
+		function done( rows) {
 			resolve( rows[ 0 ]);
 		}
 	}
@@ -635,10 +635,10 @@ ns.RoomDB.prototype.setRelation = async function( accIdA, accIdB ) {
 		throw new Error( 'ERR_DB_FAILED' );
 	}
 	
-	if ( !res || !res.rows )
+	if ( !res )
 		throw new Error( 'ERR_DB_SET_RELATION' );
 	
-	return self.rowsToRelation( res.rows );
+	return self.rowsToRelation( res );
 }
 
 ns.RoomDB.prototype.assignRelationRoom = async function( relationId, roomId ) {
@@ -681,11 +681,11 @@ ns.RoomDB.prototype.getRelation = async function( accIdA, accIdB ) {
 		throw new Error( 'ERR_DB_FAILED' );
 	}
 	
-	if ( !res || !res.rows )
+	if ( !res )
 		return null;
 	
 	roomLog( 'getRelation - res', res );
-	return self.rowsToRelation( res.rows );
+	return self.rowsToRelation( res );
 }
 
 ns.RoomDB.prototype.getRelationsFor = async function( accId ) {
@@ -702,14 +702,15 @@ ns.RoomDB.prototype.getRelationsFor = async function( accId ) {
 		throw new Error( 'ERR_DB_FAILED' );
 	}
 	
-	if ( !res || !res.rows )
+	if ( !res )
 		return null;
 	
-	return res.rows;
+	return res;
 }
 
 ns.RoomDB.prototype.authorize = function( roomId, accountIds ) {
 	const self = this;
+	roomLog( 'authorize', accountIds );
 	const accountIdStr = accountIds.join( '|' );
 	const values = [
 		roomId,
@@ -722,7 +723,12 @@ ns.RoomDB.prototype.authorize = function( roomId, accountIds ) {
 			.catch( reject );
 		
 		function authSet( res ) {
-			resolve( res.rows );
+			resolve( res );
+		}
+		
+		function reject( err ) {
+			roomLog( 'auth reject', err );
+			reject( err );
 		}
 	}
 }
@@ -742,8 +748,7 @@ ns.RoomDB.prototype.check = function( accountId, roomId ) {
 			.then( checked )
 			.catch( reject );
 		
-		function checked( res ) {
-			let rows = res.rows;
+		function checked( rows ) {
 			resolve( !!rows[ 0 ]);
 		}
 	}
@@ -774,12 +779,12 @@ ns.RoomDB.prototype.getSettings = function( roomId ) {
 			.catch( reject );
 		
 		function ok( res ) {
-			if ( !res || !res.rows ) {
+			if ( !res ) {
 				reject( 'ERR_NO_ROWS' );
 				return;
 			}
 			
-			let obj = res.rows[ 0 ];
+			let obj = res[ 0 ];
 			if ( !obj || !obj.settings ) {
 				reject( 'ERR_NO_SETTINGS' );
 				return;
@@ -867,7 +872,7 @@ util.inherits( ns.MessageDB, ns.DB );
 
 // public
 
-ns.MessageDB.prototype.set = function( conf ) {
+ns.MessageDB.prototype.set = async function( conf ) {
 	const self = this;
 	const values = [
 		conf.msgId,
@@ -879,35 +884,61 @@ ns.MessageDB.prototype.set = function( conf ) {
 		conf.message,
 	];
 	
-	return new Promise( addMsg );
-	function addMsg( resolve, reject ) {
-		self.query( 'message_set', values )
-			.then( resolve )
-			.catch( reject );
-	}
+	await self.query( 'message_set', values );
 }
 
-ns.MessageDB.prototype.get = function( eventId ) {
+ns.MessageDB.prototype.setForRelation = async function( msg, relationId, onlineList ) {
 	const self = this;
-	return new Promise(( resolve, reject ) => {
-		if ( !eventId || !self.roomId )
-			reject( 'ERR_INVALID_ARGS' );
-		
-		let values = [
-			eventId,
-		];
-		self.query( 'message_get_by_id', values )
-			.then( eBack )
-			.catch( reject );
-			
-		function eBack( res ) {
-			const rows = res.rows || [];
-			resolve( rows[ 0 ] || null );
-		}
-	});
+	await self.set( msg );
+	const values = [
+		msg.msgId,
+		relationId,
+		onlineList[ 0 ] || null,
+		onlineList[ 1 ] || null,
+	];
+	await self.query( 'message_update_relation', values );
 }
 
-ns.MessageDB.prototype.getBefore = function( firstId, length ) {
+ns.MessageDB.prototype.getRelationState = async function( relationId, contactId ) {
+	const self = this;
+	const values = [
+		relationId,
+		contactId,
+	];
+	let res;
+	try {
+		res = await self.query( 'user_relation_state', values );
+	} catch( err ) {
+		roomLog( 'getRelationState - query err', err );
+		return null;
+	}
+	
+	if ( !res )
+		return null;
+	
+	roomLog( 'res', res, 3 );
+	let unreadRes = res[ 0 ];
+	let lastMessageRes = self.parseItems( res[ 1 ]);
+	return {
+		unreadMessages : unreadRes[ 0 ].unreadMessages,
+		lastMessage    : lastMessageRes[ 0 ],
+	};
+}
+
+ns.MessageDB.prototype.get = async function( eventId ) {
+	const self = this;
+	if ( !eventId || !self.roomId )
+		throw new Error( 'ERR_INVALID_ARGS' );
+		
+	const values = [
+		eventId,
+	];
+	const rows = await self.query( 'message_get_by_id', values );
+	const events = self.parseItems( rows );
+	return events;
+}
+
+ns.MessageDB.prototype.getBefore = async function( firstId, length ) {
 	const self = this;
 	const values = [
 		self.roomId
@@ -918,27 +949,18 @@ ns.MessageDB.prototype.getBefore = function( firstId, length ) {
 	
 	values.push( length || 50 );
 	
-	return new Promise( load );
-	function load( resolve, reject ) {
-		let queryFn = 'message_get_desc';
-		if ( firstId )
-			queryFn = 'message_get_before';
-		
-		self.query( queryFn, values )
-			.then( msgBack )
-			.catch( reject );
-		
-		function msgBack( res ) {
-			const rows = res.rows || [];
-			if ( firstId && !rows.length ) // end of log
-				resolve( null )
-			else
-				resolve( rows );
-		}
-	}
+	let queryFn = 'message_get_desc';
+	if ( firstId )
+		queryFn = 'message_get_before';
+	
+	const rows = await self.query( queryFn, values );
+	if ( firstId && !rows.length ) // end of log
+		return null;
+	else
+		return self.parseItems( rows );
 }
 
-ns.MessageDB.prototype.getAfter = function( lastId, length ) {
+ns.MessageDB.prototype.getAfter = async function( lastId, length ) {
 	const self = this;
 	const values = [
 		self.roomId,
@@ -948,31 +970,22 @@ ns.MessageDB.prototype.getAfter = function( lastId, length ) {
 		values.push( lastId );
 	
 	values.push( length || 50 );
-	return new Promise( load );
-	function load( resolve, reject ) {
-		let queryFn = 'message_get_asc';
-		if ( lastId )
-			queryFn = 'message_get_after';
-		
-		self.query( queryFn, values )
-			.then( msgsBack )
-			.catch( reject );
-			
-		function msgsBack( res ) {
-			const rows = res.rows || [];
-			if ( lastId && !rows.length ) // end of log
-				resolve( null );
-			else
-				resolve( rows );
-		}
-	}
+	let queryFn = 'message_get_asc';
+	if ( lastId )
+		queryFn = 'message_get_after';
+	
+	const rows = await self.query( queryFn, values );
+	if ( lastId && !rows.length ) // end of log
+		return null;
+	else
+		return self.parseItems( rows );
 }
 
 ns.MessageDB.prototype.update = async function(
 	eventId,
 	contentUpdate,
 	reason,
-	accountId
+	editerId
 ) {
 	const self = this;
 	reason = reason || 'espen er kul';
@@ -987,8 +1000,8 @@ ns.MessageDB.prototype.update = async function(
 		return 'ERR_NOT_FOUND';
 	
 	let queryRes = null;
-	const isGrace = isInGracePeriod( event.time, accountId );
-	const isAuthor = event.fromId === accountId;
+	const isGrace = isInGracePeriod( event.time, editerId );
+	const isAuthor = event.fromId === editerId;
 	//if ( isGrace && isAuthor ) {
 	if ( 1 ) {
 		try {
@@ -1005,7 +1018,7 @@ ns.MessageDB.prototype.update = async function(
 				event.message,
 				contentUpdate,
 				reason,
-				accountId
+				editerId
 			);
 		} catch ( e ) {
 			return e;
@@ -1013,7 +1026,7 @@ ns.MessageDB.prototype.update = async function(
 	}
 	*/
 	
-	const rows = queryRes.rows || [];
+	const rows = queryRes || [];
 	return rows[ 0 ] || null;
 	
 	function isInGracePeriod( eTime, accId ) {
@@ -1044,6 +1057,27 @@ ns.MessageDB.prototype.update = async function(
 ns.MessageDB.prototype.init = function() {
 	const self = this;
 	
+}
+
+ns.MessageDB.prototype.parseItems = function( items ) {
+	const self = this;
+	msgLog( 'parseItems', items );
+	if ( !items || ( null == items.length ))
+		return null;
+	
+	const events = items.map( toTypeData );
+	return events;
+	
+	function toTypeData( item ) {
+		const event = {
+			type : item.type,
+			data : null,
+		};
+		
+		delete item.type;
+		event.data = item;
+		return event;
+	}
 }
 
 
@@ -1103,12 +1137,12 @@ ns.InviteDB.prototype.getForRoom = function( roomId ) {
 			.catch( reject );
 			
 		function tokensBack( res ) {
-			if ( !res || !res.rows ) {
+			if ( !res ) {
 				reject( 'ERR_DB_INVALID_RESULT' );
 				return;
 			}
 			
-			resolve( res.rows );
+			resolve( res );
 		}
 	});
 }
@@ -1127,10 +1161,10 @@ ns.InviteDB.prototype.checkForRoom = function( token, roomId ) {
 			.catch( reject );
 			
 		function success( res ) {
-			if ( !res || !res.rows )
+			if ( !res )
 				resolve( null );
 			else
-				resolve( res.rows[ 0 ]);
+				resolve( res[ 0 ]);
 		}
 	}
 }

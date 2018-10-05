@@ -55,6 +55,12 @@ util.inherits( ns.RoomCtrl, Emitter );
 
 // Public
 
+ns.RoomCtrl.prototype.checkActive = function( roomId ) {
+	const self = this;
+	log( 'checkActive', roomId );
+	return !!self.rooms[ roomId ];
+}
+
 ns.RoomCtrl.prototype.connectContact = async function( accId, contactId ) {
 	const self = this;
 	log( 'openContact', [

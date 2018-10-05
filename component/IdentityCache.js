@@ -35,6 +35,7 @@ ns.IDC = function( dbPool ) {
 	self.IDs = {};
 	self.lastAccess = {};
 	self.TIMEOUT = 1000 * 60 * 60 * 36;
+	self.accDB = null;
 	
 	self.init( dbPool );
 }

@@ -295,7 +295,7 @@ ns.NoMansLand.prototype.createAccount = function( bundle, cid ) {
 	}
 	
 	function accSad( err ) {
-		createFailed( err, data );
+		createFailed( err, bundle );
 	}
 	
 	function doCreate() {
@@ -376,7 +376,6 @@ ns.NoMansLand.prototype.clientLogin = function( identity, cid ) {
 		let client = self.getClient( cid );
 		let accId = acc.clientId;
 		let fData = client.friendData;
-		log( 'doLogin -fData', fData );
 		acc.auth = fData.auth;
 		acc.workgroups = fData.workgroups;
 		acc.identity = identity;

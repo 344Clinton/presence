@@ -45,6 +45,7 @@ DROP PROCEDURE IF EXISTS user_relation_create;
 DROP PROCEDURE IF EXISTS user_relation_assign_room;
 DROP PROCEDURE IF EXISTS user_relation_read;
 DROP PROCEDURE IF EXISTS user_relation_read_all_for;
+DROP PROCEDURE IF EXISTS user_relation_state;
 
 # AUTH
 DROP PROCEDURE IF EXISTS auth_get_for_room;
@@ -63,6 +64,7 @@ DROP PROCEDURE IF EXISTS message_get_after;
 DROP PROCEDURE IF EXISTS message_get_before;
 DROP PROCEDURE IF EXISTS message_update;
 DROP PROCEDURE IF EXISTS message_update_with_history;
+DROP PROCEDURE IF EXISTS message_update_relation;
 
 #INVITE TOKENS
 DROP PROCEDURE IF EXISTS invite_set;
@@ -244,7 +246,7 @@ CREATE PROCEDURE account_get_settings(
 	IN `clientId` VARCHAR( 191 )
 )
 BEGIN
-	SELECT a.settings FROM account AS a;
+SELECT a.settings FROM account AS a;
 END//
 
 #
@@ -254,9 +256,9 @@ CREATE PROCEDURE account_set_active(
 	IN `active` BOOLEAN
 )
 BEGIN
-	UPDATE account AS a
-	SET a.active = `active`
-	WHERE a.clientId = `clientId`;
+UPDATE account AS a
+SET a.active = `active`
+WHERE a.clientId = `clientId`;
 END//
 
 
@@ -274,22 +276,22 @@ CREATE PROCEDURE room_create(
 	IN `isPrivate` BOOLEAN
 )
 BEGIN
-	INSERT INTO `room` (
-		`clientId`,
-		`name`,
-		`ownerId`,
-		`settings`,
-		`isPrivate`
-	) VALUES (
-		`clientId`,
-		`name`,
-		`ownerId`,
-		`settings`,
-		`isPrivate`
-	);
-	
-	SELECT * FROM `room`
-	WHERE room.clientId = `clientId`;
+INSERT INTO `room` (
+	`clientId`,
+	`name`,
+	`ownerId`,
+	`settings`,
+	`isPrivate`
+) VALUES (
+	`clientId`,
+	`name`,
+	`ownerId`,
+	`settings`,
+	`isPrivate`
+);
+
+SELECT * FROM `room`
+WHERE room.clientId = `clientId`;
 END//
 
 #
@@ -682,6 +684,41 @@ WHERE r.userId = `accountId`;
 END//
 
 #
+# USER_RELATION_STATE
+CREATE PROCEDURE user_relation_state(
+	IN `relationId` VARCHAR( 191 ),
+	IN `contactId`  VARCHAR( 191 )
+)
+BEGIN
+DECLARE room_id VARCHAR( 191 );
+DECLARE last_read_id VARCHAR( 191 );
+SELECT
+	tur.roomId INTO room_id,
+	tur.lastReadId INTO last_read_id
+FROM user_relation AS tur
+WHERE tur.relationId = `relationId`
+AND tur.contactId = `contactId`;
+
+SELECT count(*) AS `unreadMessages` FROM message AS m
+WHERE m.roomId = room_id;
+
+SELECT
+	m.msgId,
+	m.roomId,
+	m.accountId AS `fromId`,
+	m.timestamp AS `time`,
+	m.type,
+	m.name,
+	m.message
+FROM message AS m
+WHERE m.msgId = (
+	SELECT ur.lastMsgId FROM user_relation AS ur
+	WHERE ur.relationId = `relationId` AND ur.contactId = `contactId`
+);
+
+END//
+
+#
 # MESSAGE
 #
 
@@ -794,7 +831,7 @@ SELECT
 	tmp.name,
 	tmp.message
 FROM (
-	SELECT  * FROM message AS m
+	SELECT * FROM message AS m
 	WHERE m.roomId = `roomId`
 	AND m._id > (
 		SELECT l._id
@@ -863,12 +900,27 @@ END//
 
 #CREATE PROCEDURE message_updatE_with_history
 
+# message_update_relation
+CREATE PROCEDURE message_update_relation(
+	IN `msgId`      VARCHAR( 191 ),
+	IN `relationId` VARCHAR( 191 ),
+	IN `accIdA`     VARCHAR( 191 ),
+	IN `accIdB`     VARCHAR( 191 )
+)
+BEGIN
+UPDATE user_relation AS ur
+SET
+	ur.lastMsgId = `msgId`
+WHERE ur.relationId = `relationId`;
+
+END//
+
 ## INVITE TOENS
 
 # invite_set;
 CREATE PROCEDURE invite_set(
-	IN `token` VARCHAR( 191 ),
-	IN `roomId` VARCHAR( 191 ),
+	IN `token`     VARCHAR( 191 ),
+	IN `roomId`    VARCHAR( 191 ),
 	IN `singleUse` BOOLEAN,
 	IN `createdBy` VARCHAR( 191 )
 )

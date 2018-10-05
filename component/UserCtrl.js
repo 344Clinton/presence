@@ -49,7 +49,6 @@ ns.UserCtrl = function(
 
 ns.UserCtrl.prototype.addAccount = async function( session, conf ) {
 	const self = this;
-	log( 'addAccount', conf, 3 );
 	const accId = conf.clientId;
 	const worgs = conf.workgroups;
 	delete conf.workgroups;
@@ -64,7 +63,6 @@ ns.UserCtrl.prototype.addAccount = async function( session, conf ) {
 		self.worgs,
 	);
 	
-	log( 'addAccount', account );
 	let aId = account.id;
 	if ( self.accounts[ aId ])
 		return;

@@ -1724,8 +1724,8 @@ ns.Log.prototype.load = function( conf ) {
         }
     }
     
-    async function buildLogEvent( type, dbEvents ) {
-        let events = parse( dbEvents );
+    async function buildLogEvent( type, events ) {
+        //let events = parse( dbEvents );
         let unknownIds = await getUnknownIdentities( events );
         let log = {
             type : type,
