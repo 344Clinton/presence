@@ -179,10 +179,12 @@ ns.Account.prototype.init = async function() {
 	self.roomCtrlEvents = {
 		'workgroup-join' : worgJoin,
 		'contact-join'   : contactJoin,
+		'contact-event'  : contactRoomEvent,
 	};
 	function roomCtrlEvent( e, rid ) { self.handleRoomCtrlEvent( e, rid ); }
 	function worgJoin( e, rid ) { self.handleWorkgroupJoin( e, rid ); }
 	function contactJoin( e, rid ) { self.openContactChat( e, rid ); }
+	function contactRoomEvent( e, rid ) { self.handleContactRoomEvent( e, rid ); }
 	
 	self.setIdentity();
 	
@@ -283,6 +285,15 @@ ns.Account.prototype.openContactChat = async function( event, contactId ) {
 	self.log( 'openContactChat - send active' );
 	room.send( active );
 	return room;
+}
+
+ns.Account.prototype.handleContactRoomEvent = function( event, contactId ) {
+	const self = this;
+	self.log( 'handleContactRoomEvent', {
+		e : event,
+		r : contactId,
+	});
+	
 }
 
 ns.Account.prototype.handleWorkgroupAssigned = function( addedWorg, roomId ) {
@@ -563,6 +574,10 @@ ns.Account.prototype.buildRoomAccount = function() {
 
 ns.Account.prototype.handleRoomClosed = function( roomId ) {
 	const self = this;
+	self.log( 'handleRoomClosed', roomId );
+	if ( self.contacts[ roomId ])
+		return;
+	
 	const close = {
 		type : 'close',
 		data : roomId,

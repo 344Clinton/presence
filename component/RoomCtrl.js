@@ -457,7 +457,10 @@ ns.RoomCtrl.prototype.bindContactRoom = function( room ) {
 	const self = this;
 	let rId = room.id;
 	room.on( 'empty', onEmpty );
+	room.on( 'contact-event', contactEvent );
+	
 	function onEmpty( e ) { self.removeRoom( rId ); }
+	function contactEvent( e ) { self.forwardContactEvent( e, rId ); }
 }
 
 ns.RoomCtrl.prototype.handleWorkgroupAssigned = function( worg, roomId ) {
@@ -470,6 +473,10 @@ ns.RoomCtrl.prototype.handleWorkgroupAssigned = function( worg, roomId ) {
 	userList.forEach( accId => {
 		self.emit( accId, join, roomId );
 	});
+}
+
+ns.RoomCtrl.prototype.forwardContactEvent = function( event, roomId ) {
+	const self = this;
 }
 
 ns.RoomCtrl.prototype.persistRoom = function( room ) {

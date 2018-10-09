@@ -65,6 +65,11 @@ ns.ContactRoom.prototype.connect = function( accountId ) {
     return signal;
 }
 
+ns.ContactRoom.prototype.disconnect = function( accountId ) {
+    const self = this;
+    log( 'disconnect', accountId );
+    self.releaseUser( accountId );
+}
 
 ns.ContactRoom.prototype.getOtherAccount = function( accId ) {
     const self = this;
@@ -248,12 +253,15 @@ ns.ContactRoom.prototype.setOnline = function( userId ) {
         return null;
     
     self.onlineList.push( userId );
+    
+    /*
     const online = {
         type : 'online',
         data : true,
     };
     const otherAcc = self.getOtherAccount( userId );
     self.send( online, otherAcc.accountId );
+    */
     return user;
 }
 
@@ -279,12 +287,14 @@ ns.ContactRoom.prototype.setOffline = function( userId ) {
         let removed = self.onlineList.splice( userIndex, 1 );
     }
     
+    /*
     const offline = {
         type : 'online',
         data : false
     };
     const otherAcc = self.getOtherAccount( userId );
     self.send( offline, otherAcc.accountId );
+    */
 }
 
 ns.ContactRoom.prototype.initialize =  function( requestId, userId ) {
@@ -446,7 +456,7 @@ ns.ContactSettings.prototype.setDefaults = function() {
 /*
     ContactLog
 */
-const lLog = require( './Log' )( 'ContactRoom > Log' );
+const llLog = require( './Log' )( 'ContactRoom > Log' );
 ns.ContactLog = function(
     dbPool,
     roomId,
@@ -456,7 +466,6 @@ ns.ContactLog = function(
     relationId
 ) {
     const self = this;
-    lLog( 'const - relId', relationId );
     self.onlineList = onlineList;
     self.relationId = relationId;
     components.Log.call(
@@ -471,21 +480,7 @@ ns.ContactLog = function(
 
 util.inherits( ns.ContactLog, components.Log );
 
-ns.ContactLog.prototype.persist = async function( event ) {
-    const self = this;
-    lLog( 'persist', event );
-    const item = event.data;
-    item.type = event.type;
-    const fromId = item.fromId;
-    try {
-        await self.msgDb.setForRelation( item, self.relationId, [] );
-    } catch( err ) {
-        lLog( 'persist - err', err );
-        return false;
-    }
-    
-    return true;
-}
+// Public
 
 ns.ContactLog.prototype.baseClose = ns.ContactLog.prototype.close;
 ns.ContactLog.prototype.close = function() {
@@ -493,6 +488,43 @@ ns.ContactLog.prototype.close = function() {
     delete self.onlineList;
     delete self.relationId;
     self.baseClose();
+}
+
+ns.ContactLog.prototype.confirm = async function( msgId, userId ) {
+    const self = this;
+    llLog( 'confirm', [
+        msgId,
+        userId,
+    ]);
+    if ( !msgId || !userId )
+        return;
+    
+    try {
+        await self.msgDb.updateUserLastRead( self.relationId, userId, msgId );
+    } catch( err ) {
+        llLog( 'confirm - db fail', err );
+        return false;
+    }
+    
+    return true;
+}
+
+// Private
+
+ns.ContactLog.prototype.persist = async function( event ) {
+    const self = this;
+    llLog( 'persist', event );
+    const item = event.data;
+    item.type = event.type;
+    const fromId = item.fromId;
+    try {
+        await self.msgDb.setForRelation( item, self.relationId, self.onlineList );
+    } catch( err ) {
+        llLog( 'persist - err', err );
+        return false;
+    }
+    
+    return true;
 }
 
 //

@@ -46,6 +46,8 @@ DROP PROCEDURE IF EXISTS user_relation_assign_room;
 DROP PROCEDURE IF EXISTS user_relation_read;
 DROP PROCEDURE IF EXISTS user_relation_read_all_for;
 DROP PROCEDURE IF EXISTS user_relation_state;
+DROP PROCEDURE IF EXISTS user_relation_update_last_read;
+DROP PROCEDURE IF EXISTS user_relation_update_messages;
 
 # AUTH
 DROP PROCEDURE IF EXISTS auth_get_for_room;
@@ -64,7 +66,6 @@ DROP PROCEDURE IF EXISTS message_get_after;
 DROP PROCEDURE IF EXISTS message_get_before;
 DROP PROCEDURE IF EXISTS message_update;
 DROP PROCEDURE IF EXISTS message_update_with_history;
-DROP PROCEDURE IF EXISTS message_update_relation;
 
 #INVITE TOKENS
 DROP PROCEDURE IF EXISTS invite_set;
@@ -76,6 +77,7 @@ DROP PROCEDURE IF EXISTS invite_used;
 
 # UTIL
 DROP FUNCTION IF EXISTS fn_split_str;
+DROP FUNCTION IF EXISTS fn_get_msg_time;
 
 #
 # UTIL
@@ -93,6 +95,18 @@ RETURN REPLACE(SUBSTRING(SUBSTRING_INDEX( source, delim, pos),
 		LENGTH(SUBSTRING_INDEX( source, delim, pos -1)) + 1),
 		delim, '')//
 
+# RETURN MSG TIMESTAMP
+CREATE FUNCTION fn_get_msg_time(
+	msg_id VARCHAR( 191 )
+) RETURNS BIGINT DETERMINISTIC
+BEGIN
+DECLARE msg_time BIGINT DEFAULT NULL;
+SELECT msg.timestamp INTO msg_time FROM message AS msg
+	WHERE msg.msgId = msg_id
+	LIMIT 1;
+
+RETURN msg_time;
+END//
 
 #
 #
@@ -692,15 +706,32 @@ CREATE PROCEDURE user_relation_state(
 BEGIN
 DECLARE room_id VARCHAR( 191 );
 DECLARE last_read_id VARCHAR( 191 );
+
 SELECT
-	tur.roomId INTO room_id,
-	tur.lastReadId INTO last_read_id
+	tur.roomId,
+	tur.lastReadId
+INTO
+	room_id,
+	last_read_id
 FROM user_relation AS tur
 WHERE tur.relationId = `relationId`
 AND tur.contactId = `contactId`;
 
+IF ( last_read_id IS NULL ) THEN
+	SET last_read_id := (
+		SELECT rm.msgId FROM message AS rm
+		WHERE rm.roomId = room_id
+		ORDER BY rm._id ASC
+		LIMIT 1
+	);
+END IF;
+
 SELECT count(*) AS `unreadMessages` FROM message AS m
-WHERE m.roomId = room_id;
+WHERE m.roomId = room_id
+AND m._id > (
+	SELECT lr._id FROM message AS lr
+	WHERE lr.msgId = last_read_id
+);
 
 SELECT
 	m.msgId,
@@ -717,6 +748,62 @@ WHERE m.msgId = (
 );
 
 END//
+
+#
+# USER RELATION UPDATE LAST READ
+CREATE PROCEDURE user_relation_update_last_read(
+	IN `relationId` VARCHAR( 191 ),
+	IN `userId`     VARCHAR( 191 ),
+	IN `lastReadId` VARCHAR( 191 )
+)
+required_label:BEGIN
+DECLARE update_msg_id VARCHAR( 191 );
+SELECT m.msgId INTO update_msg_id FROM message AS m
+WHERE m.msgId = `lastReadId`;
+
+IF ( update_msg_id IS NULL ) THEN
+	LEAVE required_label;
+END IF;
+
+UPDATE user_relation AS ur
+SET	ur.lastReadId = `lastReadId`
+WHERE
+	ur.relationId = `relationId`
+	AND ur.userId = `userId`
+	AND ( fn_get_msg_time( ur.lastReadId ) < fn_get_msg_time( update_msg_id ));
+
+END//
+
+
+# user_relation_update_messages
+CREATE PROCEDURE user_relation_update_messages(
+	IN `msgId`      VARCHAR( 191 ),
+	IN `relationId` VARCHAR( 191 ),
+	IN `accIdA`     VARCHAR( 191 ),
+	IN `accIdB`     VARCHAR( 191 )
+)
+BEGIN
+UPDATE user_relation AS ur
+SET
+	ur.lastMsgId = `msgId`
+WHERE ur.relationId = `relationId`;
+
+IF ( `accIdA` IS NOT NULL ) THEN
+	UPDATE user_relation AS ur_a
+	SET ur_a.lastReadId = `msgId`
+	WHERE ur_a.relationId = `relationId`
+	AND ur_a.userId = `accIdA`;
+END IF;
+
+IF ( `accIdB` IS NOT NULL ) THEN
+	UPDATE user_relation AS ur_b
+	SET ur_b.lastReadId = `msgId`
+	WHERE ur_b.relationId = `relationId`
+	AND ur_b.userId = `accIdB`;
+END IF;
+
+END//
+
 
 #
 # MESSAGE
@@ -900,20 +987,6 @@ END//
 
 #CREATE PROCEDURE message_updatE_with_history
 
-# message_update_relation
-CREATE PROCEDURE message_update_relation(
-	IN `msgId`      VARCHAR( 191 ),
-	IN `relationId` VARCHAR( 191 ),
-	IN `accIdA`     VARCHAR( 191 ),
-	IN `accIdB`     VARCHAR( 191 )
-)
-BEGIN
-UPDATE user_relation AS ur
-SET
-	ur.lastMsgId = `msgId`
-WHERE ur.relationId = `relationId`;
-
-END//
 
 ## INVITE TOENS
 

@@ -162,16 +162,18 @@ ns.Chat.prototype.close = function( callback ) {
 ns.Chat.prototype.init = function() {
     const self = this;
     self.eventMap = {
-        'msg'   : msg,
-        'log'   : log,
-        'edit'  : edit,
-        'state' : state,
+        'msg'     : msg,
+        'log'     : log,
+        'edit'    : edit,
+        'state'   : state,
+        'confirm' : confirm,
     };
     
     function msg( e, uid ) { self.handleMsg( e, uid ); }
     function log( e, uid ) { self.handleLog( e, uid ); }
     function edit( e, uid ) { self.handleEdit( e, uid ); }
     function state( e, uid ) { self.handleState( e, uid ); }
+    function confirm( e, uid ) { self.handleConfirm( e, uid ); }
 }
 
 ns.Chat.prototype.handleChat = function( event, userId ) {
@@ -294,6 +296,22 @@ ns.Chat.prototype.handleState = function( state, userId ) {
         },
     };
     self.broadcast( event, userId );
+}
+
+ns.Chat.prototype.handleConfirm = function( event, userId ) {
+    const self = this;
+    cLog( 'handleConfirm', {
+        e : event,
+        u : userId,
+    });
+    
+    if ( 'message' === event.type ) {
+        self.log.confirm( event.eventId, userId );
+        return;
+    }
+    
+    cLog( 'handleConfirm - unhandled confirm event', event );
+    
 }
 
 ns.Chat.prototype.broadcast = function( event, sourceId, wrapSource ) {
@@ -1646,6 +1664,14 @@ ns.Log.prototype.setPersistent = function( isPersistent ) {
     
     self.persistent = isPersistent;
     self.writeLogToDb();
+}
+
+ns.Log.prototype.confirm = async function( msgId, userId ) {
+    const self = this;
+    llLog( 'confirm', [
+        msgId,
+        userId,
+    ]);
 }
 
 ns.Log.prototype.close = function() {

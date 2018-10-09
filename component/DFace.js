@@ -889,14 +889,28 @@ ns.MessageDB.prototype.set = async function( conf ) {
 
 ns.MessageDB.prototype.setForRelation = async function( msg, relationId, onlineList ) {
 	const self = this;
-	await self.set( msg );
+	msgLog( 'setForRelation', onlineList );
+	try {
+		await self.set( msg );
+	} catch( err ) {
+		msgLog( 'setForRelation, set msg - query failed', err );
+		return false;
+	}
+	
 	const values = [
 		msg.msgId,
 		relationId,
 		onlineList[ 0 ] || null,
 		onlineList[ 1 ] || null,
 	];
-	await self.query( 'message_update_relation', values );
+	try {
+		await self.query( 'user_relation_update_messages', values );
+	} catch ( err ) {
+		msgLog( 'setForRelation, update relation - query failed', err );
+		return false;
+	}
+	
+	return true;
 }
 
 ns.MessageDB.prototype.getRelationState = async function( relationId, contactId ) {
@@ -923,6 +937,24 @@ ns.MessageDB.prototype.getRelationState = async function( relationId, contactId 
 		unreadMessages : unreadRes[ 0 ].unreadMessages,
 		lastMessage    : lastMessageRes[ 0 ],
 	};
+}
+
+ns.MessageDB.prototype.updateUserLastRead = async function( relationId, userId, msgId ) {
+	const self = this;
+	const values = [
+		relationId,
+		userId,
+		msgId,
+	];
+	msgLog( 'updateUserLastRead', values );
+	try {
+		await self.query( 'user_relation_update_last_read', values );
+	} catch( err ) {
+		msgLog( 'updateUserLastRead - db err', err );
+		return false;
+	}
+	
+	return true;
 }
 
 ns.MessageDB.prototype.get = async function( eventId ) {
