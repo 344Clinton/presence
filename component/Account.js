@@ -278,12 +278,12 @@ ns.Account.prototype.openContactChat = async function( event, contactId ) {
 	
 	self.relations[ contactId ] = true;
 	await self.joinedARoomHooray( room );
-	const active = {
-		type : 'active',
+	const open = {
+		type : 'open',
 		data : true,
 	};
-	self.log( 'openContactChat - send active' );
-	room.send( active );
+	self.log( 'openContactChat - send open' );
+	room.send( open );
 	return room;
 }
 

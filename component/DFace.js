@@ -887,9 +887,9 @@ ns.MessageDB.prototype.set = async function( conf ) {
 	await self.query( 'message_set', values );
 }
 
-ns.MessageDB.prototype.setForRelation = async function( msg, relationId, onlineList ) {
+ns.MessageDB.prototype.setForRelation = async function( msg, relationId, activeList ) {
 	const self = this;
-	msgLog( 'setForRelation', onlineList );
+	msgLog( 'setForRelation', activeList );
 	try {
 		await self.set( msg );
 	} catch( err ) {
@@ -900,8 +900,8 @@ ns.MessageDB.prototype.setForRelation = async function( msg, relationId, onlineL
 	const values = [
 		msg.msgId,
 		relationId,
-		onlineList[ 0 ] || null,
-		onlineList[ 1 ] || null,
+		activeList[ 0 ] || null,
+		activeList[ 1 ] || null,
 	];
 	try {
 		await self.query( 'user_relation_update_messages', values );

@@ -107,7 +107,7 @@ ns.ContactRoom.prototype.init = function() {
             self.dbPool,
             self.id,
             self.users,
-            self.onlineList,
+            self.activeList,
             self.idCache,
             self.ownerId
         );
@@ -226,6 +226,7 @@ ns.ContactRoom.prototype.bindUser = function( userId ) {
     user.on( 'leave', leaveRoom );
     user.on( 'live-join', joinLive );
     user.on( 'live-leave', leaveLive );
+    user.on( 'active', active );
     
     let uid = userId;
     function init( e ) { self.initialize( e, uid ); }
@@ -235,6 +236,7 @@ ns.ContactRoom.prototype.bindUser = function( userId ) {
     function leaveRoom( e ) { self.handleLeave( uid ); }
     function joinLive( e ) { self.handleJoinLive( e, uid ); }
     function leaveLive( e ) { self.handleLeaveLive( e, uid ); }
+    function active( e ) { self.handleActive( e, uid ); }
     
     // add to components
     self.chat.bind( userId );
@@ -243,6 +245,42 @@ ns.ContactRoom.prototype.bindUser = function( userId ) {
     // show online
     self.setOnline( userId );
     return user;
+}
+
+ns.ContactRoom.prototype.handleActive = function( event, userId ) {
+    const self = this;
+    log( 'handleActive', {
+        e : event,
+        u : userId,
+    });
+    
+    if ( event.isActive )
+        add( userId );
+    else
+        remove( userId );
+    
+    function add( uId ) {
+        if ( false !== indexInList( uId ))
+            return;
+        
+        self.activeList.push( uId );
+    }
+    
+    function remove( uId ) {
+        let index = indexInList( uId );
+        if ( false === index )
+            return;
+        
+        self.activeList.splice( index, 1 );
+    }
+    
+    function indexInList( uId ) {
+        let index = self.activeList.indexOf( uId );
+        if ( -1 === index )
+            return false;
+        else
+            return index;
+    }
 }
 
 ns.ContactRoom.prototype.setOnline = function( userId ) {
@@ -461,12 +499,12 @@ ns.ContactLog = function(
     dbPool,
     roomId,
     users,
-    onlineList,
+    activeList,
     idCache,
     relationId
 ) {
     const self = this;
-    self.onlineList = onlineList;
+    self.activeList = activeList;
     self.relationId = relationId;
     components.Log.call(
         self,
@@ -485,7 +523,7 @@ util.inherits( ns.ContactLog, components.Log );
 ns.ContactLog.prototype.baseClose = ns.ContactLog.prototype.close;
 ns.ContactLog.prototype.close = function() {
     const self = this;
-    delete self.onlineList;
+    delete self.activeList;
     delete self.relationId;
     self.baseClose();
 }
@@ -518,7 +556,7 @@ ns.ContactLog.prototype.persist = async function( event ) {
     item.type = event.type;
     const fromId = item.fromId;
     try {
-        await self.msgDb.setForRelation( item, self.relationId, self.onlineList );
+        await self.msgDb.setForRelation( item, self.relationId, self.activeList );
     } catch( err ) {
         llLog( 'persist - err', err );
         return false;

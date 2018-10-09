@@ -60,6 +60,7 @@ ns.Room = function( conf, db, idCache, worgCtrl ) {
 	self.users = {};
 	self.identities = {};
 	self.onlineList = [];
+	self.activeList = [];
 	self.authorized = [];
 	self.accessKey = null;
 	self.roomDb = null;
@@ -240,8 +241,12 @@ ns.Room.prototype.close = function( callback ) {
 	delete self.worgs;
 	delete self.settings;
 	
-	self.onlineList.forEach( release );
+	if ( self.onlineList )
+		self.onlineList
+			.forEach( uid => self.releaseUser( uid ));
+	
 	delete self.onlineList;
+	delete self.activeList;
 	delete self.authorized;
 	delete self.users;
 	
@@ -252,7 +257,6 @@ ns.Room.prototype.close = function( callback ) {
 	if ( callback )
 		callback();
 	
-	function release( uid ) { self.releaseUser( uid ); }
 }
 
 // Private
@@ -485,6 +489,7 @@ ns.Room.prototype.bindUser = function( account ) {
 	user.on( 'leave', leaveRoom );
 	user.on( 'live-join', joinLive );
 	user.on( 'live-leave', leaveLive );
+	user.on( 'active', active );
 	
 	let uid = userId;
 	function init( e ) { self.initialize( e, uid ); }
@@ -494,6 +499,7 @@ ns.Room.prototype.bindUser = function( account ) {
 	function leaveRoom( e ) { self.handleLeave( uid ); }
 	function joinLive( e ) { self.handleJoinLive( e, uid ); }
 	function leaveLive( e ) { self.handleLeaveLive( e, uid ); }
+	function active( e ) { self.handleActive( e, uid ); }
 	
 	// add to components
 	self.invite.bind( userId );
@@ -866,6 +872,10 @@ ns.Room.prototype.handleJoinLive = function( event, uid ) {
 ns.Room.prototype.handleLeaveLive = function( event, uid ) {
 	const self = this;
 	self.live.remove( uid );
+}
+
+ns.Room.prototype.handleActive = function( event, userId ) {
+    const self = this;
 }
 
 // very private
