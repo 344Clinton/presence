@@ -73,10 +73,8 @@ ns.UserCtrl.prototype.addAccount = async function( session, conf ) {
 	self.broadcastOnlineStatus( accId, true );
 	setTimeout( uo, 1000 );
 	function uo() {
-		log( 'uo' );
 		self.updateOnlineStatus( accId );
 	}
-	//self.setContactList( aId );
 }
 
 ns.UserCtrl.prototype.addGuest = function( session, conf ) {

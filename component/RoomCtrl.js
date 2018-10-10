@@ -364,15 +364,25 @@ ns.RoomCtrl.prototype.joinWithInvite = function( account, conf, callback ) {
 				return;
 			}
 			
-			self.authorizeForRoom( account, rid, authBack );
+			self.authorizeForRoom( account.clientId, rid, authBack );
 		}
 	}
 	
 	function authBack( err, uid ) {
+		if ( err ) {
+			callback( err, null );
+			return;
+		}
+		
 		self.addToRoom( account, rid, addBack );
 	}
 	
 	function addBack( err , uid ) {
+		if ( err ) {
+			callback( err, null );
+			return;
+		}
+		
 		const user = room.connect( account );
 		callback( null, user );
 	}
@@ -612,7 +622,6 @@ ns.RoomCtrl.prototype.getContactRoom = async function( accId, contactId ) {
 	}
 	
 	async function createRoom( relationId, accId, contactId ) {
-		log( 'getContactRoom.createRoom' );
 		const relation = self.relations[ relationId ];
 		let room = null;
 		let roomId = null;
@@ -663,16 +672,11 @@ ns.RoomCtrl.prototype.createContactRoom = async function( relationId ) {
 		return null;
 	}
 	
-	log( 'createContactRoom - roomConf', roomConf );
 	return roomConf.clientId;
 }
 
 ns.RoomCtrl.prototype.setRelation = async function( accIdA, accIdB ) {
 	const self = this;
-	log( 'setRelation', [
-		accIdA,
-		accIdB,
-	]);
 	let relation = null;
 	try {
 		relation = await self.roomDb.setRelation( accIdA, accIdB );
@@ -693,7 +697,6 @@ ns.RoomCtrl.prototype.setRelation = async function( accIdA, accIdB ) {
 		return null;
 	}
 	
-	log( 'setRelation - relation', relation );
 	self.relations[ relation.clientId ] = relation;
 	self.relationIds = Object.keys( self.relations );
 	return relation;
@@ -709,7 +712,6 @@ ns.RoomCtrl.prototype.getRelation = async function( accIdA, accIdB ) {
 		return null;
 	}
 	
-	log( 'getRelation rel', relation );
 	if ( !relation )
 		return null;
 	

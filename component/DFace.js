@@ -643,10 +643,6 @@ ns.RoomDB.prototype.setRelation = async function( accIdA, accIdB ) {
 
 ns.RoomDB.prototype.assignRelationRoom = async function( relationId, roomId ) {
 	const self = this;
-	roomLog( 'assignRelationRoom', [
-		relationId,
-		roomId,
-	]);
 	const values = [
 		relationId,
 		roomId,
@@ -665,10 +661,6 @@ ns.RoomDB.prototype.assignRelationRoom = async function( relationId, roomId ) {
 
 ns.RoomDB.prototype.getRelation = async function( accIdA, accIdB ) {
 	const self = this;
-	roomLog( 'getRelation', {
-		a : accIdA,
-		b : accIdB,
-	});
 	const values = [
 		accIdA,
 		accIdB,
@@ -684,7 +676,6 @@ ns.RoomDB.prototype.getRelation = async function( accIdA, accIdB ) {
 	if ( !res )
 		return null;
 	
-	roomLog( 'getRelation - res', res );
 	return self.rowsToRelation( res );
 }
 
@@ -838,7 +829,6 @@ ns.RoomDB.prototype.init = function() {
 
 ns.RoomDB.prototype.rowsToRelation = function( rows ) {
 	const self = this;
-	roomLog( 'rowsToRelation', rows );
 	if ( !rows || ( 2 !== rows.length ))
 		return null;
 	
@@ -851,7 +841,6 @@ ns.RoomDB.prototype.rowsToRelation = function( rows ) {
 	};
 	relation[ rowA.userId ] = rowA;
 	relation[ rowB.userId ] = rowB;
-	roomLog( 'rowsToRelation - relation', relation );
 	return relation;
 }
 
@@ -1093,7 +1082,6 @@ ns.MessageDB.prototype.init = function() {
 
 ns.MessageDB.prototype.parseItems = function( items ) {
 	const self = this;
-	msgLog( 'parseItems', items );
 	if ( !items || ( null == items.length ))
 		return null;
 	

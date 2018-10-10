@@ -154,11 +154,6 @@ ns.Account.prototype.removeContact = function( contactId ) {
 
 ns.Account.prototype.updateContactStatus = function( contactId, type, value ) {
 	const self = this;
-	self.log( 'updateContactStatus', [
-		contactId,
-		type,
-		value,
-	]);
 	const event = {
 		type : type,
 		data : value,
@@ -383,7 +378,6 @@ ns.Account.prototype.loadRooms = async function() {
 	const self = this;
 	const roomDb = new dFace.RoomDB( self.dbPool );
 	const memberWorgs = self.worgCtrl.getMemberOfAsFID( self.id );
-	self.log( 'memberWorgs', memberWorgs );
 	let list = null;
 	try {
 		list = await roomDb.getForAccount( self.id, memberWorgs );
@@ -392,6 +386,7 @@ ns.Account.prototype.loadRooms = async function() {
 		return false;
 	}
 	
+	self.log( 'loadRooms', list );
 	await Promise.all( list.map( await connect ));
 	return true;
 	
@@ -427,7 +422,6 @@ ns.Account.prototype.loadRelations = async function() {
 	await Promise.all( dbRelations.map( await setRelation ));
 	const contactList = dbRelations.map( rel => rel.contactId );
 	const newList = contactList.filter( notInContacts );
-	self.log( 'newList', newList );
 	if ( !newList.length )
 		return;
 	
@@ -446,15 +440,12 @@ ns.Account.prototype.loadRelations = async function() {
 	}
 	
 	async function setRelation( relation ) {
-		self.log( 'setRelation', relation );
 		let rId = relation.relationId;
 		let cId = relation.contactId;
 		if ( self.relations[ cId ])
 			return;
 		
 		let state = await msgDb.getRelationState( rId, cId );
-		self.log( 'loadRelations - setRelation state', state, 3 );
-		
 		if ( !state ) {
 			self.relations[ cId ] = true;
 			return;
@@ -464,9 +455,13 @@ ns.Account.prototype.loadRelations = async function() {
 	}
 	
 	async function checkRoomAvailability( rel ) {
-		self.log( 'checkRoomAvailability', rel );
 		const roomId = rel.roomId;
 		const isActive = self.roomCtrl.checkActive( roomId );
+		self.log( 'checkRoomAvailability', {
+			roomId   : roomId,
+			isActive : isActive,
+		});
+		
 		if ( !isActive )
 			return;
 		
@@ -617,7 +612,6 @@ ns.Account.prototype.sendContactEvent = function( contactId, event ) {
 			event     : event,
 		},
 	};
-	self.log( 'sendContactEvent', wrap, 3 );
 	self.session.send( wrap );
 }
 
@@ -639,7 +633,6 @@ ns.Account.prototype.someContactFnNotInUse = async function( event, clientId ) {
 
 ns.Account.prototype.logout = function( callback ) {
 	const self = this;
-	self.log( 'logout' );
 	if ( self.roomCtrl )
 		self.roomCtrl.release( self.id );
 	
@@ -733,12 +726,16 @@ ns.Rooms.prototype.remove = function( roomId ) {
 ns.Rooms.prototype.getRooms = function() {
 	const self = this;
 	const rooms = self.list
-		.map( idAndName );
+		.map( roomConf )
+		.filter( conf => !!conf );
 		
 	return rooms;
 	
-	function idAndName( rid ) {
+	function roomConf( rid ) {
 		const room = self.rooms[ rid ];
+		if ( room.isPrivate )
+			return null;
+		
 		return {
 			clientId   : rid,
 			persistent : room.persistent,

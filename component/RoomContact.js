@@ -71,6 +71,19 @@ ns.ContactRoom.prototype.disconnect = function( accountId ) {
     self.releaseUser( accountId );
 }
 
+ns.ContactRoom.prototype.authorizeUser = function( userId, callback ) {
+    const self = this;
+    if ( callback )
+        callback( 'ERR_PRIVATE_ROOM', null );
+    
+    return false;
+}
+
+ns.ContactRoom.prototype.authenticateInvite = async function( token ) {
+    const self = this;
+    return false;
+}
+
 ns.ContactRoom.prototype.getOtherAccount = function( accId ) {
     const self = this;
     let otherId;
@@ -102,7 +115,6 @@ ns.ContactRoom.prototype.init = function() {
     );
     
     async function settingsDone( err , res ) {
-        log( 'Log', self.ownerId );
         self.log = new ns.ContactLog(
             self.dbPool,
             self.id,
@@ -112,7 +124,6 @@ ns.ContactRoom.prototype.init = function() {
             self.ownerId
         );
         
-        log( 'Chat' );
         self.chat = new components.Chat(
             self.id,
             self.users,
@@ -120,7 +131,6 @@ ns.ContactRoom.prototype.init = function() {
             self.log
         );
         
-        log( 'Live' );
         self.live = new components.Live(
             self.users,
             self.onlineList,
