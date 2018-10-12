@@ -176,12 +176,12 @@ ns.Account.prototype.init = async function() {
 		'contact-join'   : contactJoin,
 		'contact-event'  : contactRoomEvent,
 	};
-	function roomCtrlEvent( e, rid ) { self.handleRoomCtrlEvent( e, rid ); }
-	function worgJoin( e, rid ) { self.handleWorkgroupJoin( e, rid ); }
-	function contactJoin( e, rid ) { self.openContactChat( e, rid ); }
-	function contactRoomEvent( e, rid ) { self.handleContactRoomEvent( e, rid ); }
 	
 	self.setIdentity();
+	
+	self.clientContactEvents = {
+		'start' : startContactChat,
+	};
 	
 	//
 	self.session.on( 'initialize', init );
@@ -204,6 +204,12 @@ ns.Account.prototype.init = async function() {
 	
 	return true;
 	
+	function roomCtrlEvent( e, rid ) { self.handleRoomCtrlEvent( e, rid ); }
+	function worgJoin( e, rid ) { self.handleWorkgroupJoin( e, rid ); }
+	function contactJoin( e, rid ) { self.openContactChat( e, rid ); }
+	function contactRoomEvent( e, rid ) { self.handleContactRoomEvent( e, rid ); }
+	
+	
 	function init( e, cid ) { self.initializeClient( e, cid ); }
 	function identity( e, cid ) { self.updateIdentity( e, cid ); }
 	function handleSettings( e, cid ) { self.handleSettings( e, cid ); }
@@ -211,6 +217,8 @@ ns.Account.prototype.init = async function() {
 	function joinRoom( e, cid ) { self.joinRoom( e, cid ); }
 	function createRoom( e, cid ) { self.createRoom( e, cid ); }
 	function handleContact( e, cid ) { self.handleContactEvent( e, cid ); }
+	
+	function startContactChat( e, cId ) { self.handleStartContactChat( e, cId ); }
 	
 	function roomClosed( e ) { self.handleRoomClosed( e ); }
 	//function joinedRoom( e, rid ) { self.handleJoinedRoom( e, rid ); }
@@ -601,6 +609,11 @@ ns.Account.prototype.handleContactEvent = function( event, clientId ) {
 		event,
 		clientId,
 	]);
+	let handler = self.clientContactEvents[ event.type ];
+	if ( !handler )
+		return;
+	
+	handler( event.data, clientId );
 }
 
 ns.Account.prototype.sendContactEvent = function( contactId, event ) {
@@ -613,6 +626,11 @@ ns.Account.prototype.sendContactEvent = function( contactId, event ) {
 		},
 	};
 	self.session.send( wrap );
+}
+
+ns.Account.prototype.handleStartContactChat = function( event, clientId ) {
+	const self = this;
+	self.log( 'handleStartContactChat', event );
 }
 
 ns.Account.prototype.someContactFnNotInUse = async function( event, clientId ) {
