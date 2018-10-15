@@ -560,6 +560,7 @@ ns.Account.prototype.joinedARoomHooray = async function( room, reqId  ) {
 		type : 'join',
 		data : res,
 	};
+	
 	await self.session.send( joined );
 	self.rooms.add( room );
 	room.setIdentity( self.identity );
@@ -628,9 +629,14 @@ ns.Account.prototype.sendContactEvent = function( contactId, event ) {
 	self.session.send( wrap );
 }
 
-ns.Account.prototype.handleStartContactChat = function( event, clientId ) {
+ns.Account.prototype.handleStartContactChat = async function( contactId, clientId ) {
 	const self = this;
-	self.log( 'handleStartContactChat', event );
+	self.log( 'handleStartContactChat', contactId );
+	if ( self.contacts[ contactId ])
+		return;
+	
+	const identity = await self.idCache.get( contactId );
+	self.addContact( identity );
 }
 
 ns.Account.prototype.someContactFnNotInUse = async function( event, clientId ) {
