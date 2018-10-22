@@ -270,6 +270,7 @@ ns.Account.prototype.openContactChat = async function( event, contactId ) {
 	let room = self.rooms.get( contactId );
 	if ( room ) {
 		self.log( 'openContactChat - already in room', contactId );
+		sendOpen();
 		return room;
 	}
 	
@@ -281,13 +282,17 @@ ns.Account.prototype.openContactChat = async function( event, contactId ) {
 	
 	self.relations[ contactId ] = true;
 	await self.joinedARoomHooray( room );
-	const open = {
-		type : 'open',
-		data : true,
-	};
-	self.log( 'openContactChat - send open' );
-	room.send( open );
+	sendOpen();
 	return room;
+	
+	function sendOpen() {
+		const open = {
+			type : 'open',
+			data : true,
+		};
+		self.log( 'openContactChat - send open' );
+		room.send( open );
+	}
 }
 
 ns.Account.prototype.handleContactRoomEvent = function( event, contactId ) {
