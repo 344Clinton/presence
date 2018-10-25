@@ -276,7 +276,7 @@ ns.NoMansLand.prototype.createAccount = function( bundle, cid ) {
 	self.accDb.get( bundle.login )
 		.then( accBack )
 		.catch( accSad );
-		
+	
 	function accBack( data ) {
 		if ( data ) {
 			// account exists
@@ -316,6 +316,11 @@ ns.NoMansLand.prototype.createAccount = function( bundle, cid ) {
 	}
 	
 	function createFailed( errCode, data ) {
+		log( 'createFailed', {
+			errCode : errCode,
+			data    : data,
+		}, 3 );
+		
 		var fail = {
 			type : 'error',
 			data : {
