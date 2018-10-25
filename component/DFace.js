@@ -1010,24 +1010,26 @@ ns.MessageDB.prototype.update = async function(
 ) {
 	const self = this;
 	reason = reason || 'espen er kul';
-	let event = null;
+	let events = null;
 	try {
-		event = await self.get( eventId );
+		events = await self.get( eventId );
 	} catch( e ) {
 		return e;
 	}
 	
-	if ( !event )
+	if ( !events )
 		return 'ERR_NOT_FOUND';
 	
+	const dbMsg = events[ 0 ].data;
 	let queryRes = null;
-	const isGrace = isInGracePeriod( event.time, editerId );
-	const isAuthor = event.fromId === editerId;
+	const isGrace = isInGracePeriod( dbMsg.time, editerId );
+	const isAuthor = dbMsg.fromId === editerId;
 	//if ( isGrace && isAuthor ) {
 	if ( 1 ) {
 		try {
-			queryRes = await update( event.msgId, contentUpdate );
+			queryRes = await update( dbMsg.msgId, contentUpdate );
 		} catch ( e ) {
+			msgLog( 'err', e );
 			return e;
 		}
 	}
@@ -1035,8 +1037,8 @@ ns.MessageDB.prototype.update = async function(
 	else {
 		try {
 			queryRes = await updateWithHistory(
-				event.msgId,
-				event.message,
+				dbMsg.msgId,
+				dbMsg.message,
 				contentUpdate,
 				reason,
 				editerId
@@ -1054,7 +1056,7 @@ ns.MessageDB.prototype.update = async function(
 		return true;
 	}
 	
-	function update( eId, message ) {
+	async function update( eId, message ) {
 		let values = [
 			eId,
 			message,

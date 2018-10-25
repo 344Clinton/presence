@@ -238,23 +238,24 @@ ns.Chat.prototype.handleEdit = function( event, userId ) {
         .then( loaded )
         .catch( error );
     
-    function loaded( dbEvent ) {
-        if ( !dbEvent ) {
+    function loaded( dbEvents ) {
+        if ( !dbEvents ) {
             error( 'ERR_NOT_FOUND' );
             return;
         }
         
-        checkAllowed( dbEvent, userId );
+        checkAllowed( dbEvents[ 0 ], userId );
     }
     
     function checkAllowed( dbEvent, userId ) {
-        let isAdmin = checkIsAdmin( userId );
-        if ( dbEvent.fromId !== userId || !isAdmin ) {
+        const isAdmin = checkIsAdmin( userId );
+        const dbMsg = dbEvent.data;
+        if ( dbMsg.fromId !== userId && !isAdmin ) {
             error( 'ERR_NOT_ALLOWED' );
             return;
         }
         
-        self.log.editEvent( dbEvent.msgId, event.message, null, userId )
+        self.log.editEvent( dbMsg.msgId, event.message, null, userId )
             .then( updateDone )
             .catch( error );
     }
