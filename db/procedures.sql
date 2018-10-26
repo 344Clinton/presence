@@ -100,7 +100,7 @@ CREATE FUNCTION fn_get_msg_time(
 	msg_id VARCHAR( 191 )
 ) RETURNS BIGINT DETERMINISTIC
 BEGIN
-DECLARE msg_time BIGINT DEFAULT NULL;
+DECLARE msg_time BIGINT DEFAULT 0;
 SELECT msg.timestamp INTO msg_time FROM message AS msg
 	WHERE msg.msgId = msg_id
 	LIMIT 1;
@@ -717,21 +717,9 @@ FROM user_relation AS tur
 WHERE tur.relationId = `relationId`
 AND tur.contactId = `contactId`;
 
-IF ( last_read_id IS NULL ) THEN
-	SET last_read_id := (
-		SELECT rm.msgId FROM message AS rm
-		WHERE rm.roomId = room_id
-		ORDER BY rm._id ASC
-		LIMIT 1
-	);
-END IF;
-
 SELECT count(*) AS `unreadMessages` FROM message AS m
 WHERE m.roomId = room_id
-AND m._id > (
-	SELECT lr._id FROM message AS lr
-	WHERE lr.msgId = last_read_id
-);
+AND m.timestamp > fn_get_msg_time( last_read_id );
 
 SELECT
 	m.msgId,

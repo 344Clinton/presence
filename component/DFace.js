@@ -935,7 +935,6 @@ ns.MessageDB.prototype.updateUserLastRead = async function( relationId, userId, 
 		userId,
 		msgId,
 	];
-	msgLog( 'updateUserLastRead', values );
 	try {
 		await self.query( 'user_relation_update_last_read', values );
 	} catch( err ) {
